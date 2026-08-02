@@ -22,14 +22,12 @@ const LEGACY_SETTINGS_KEY = "@paseo:settings";
 export type SendBehavior = "interrupt" | "queue";
 export type ReleaseChannel = "stable" | "beta";
 export type ServiceUrlBehavior = "ask" | "in-app" | "external";
-export type WorkspaceTitleSource = "title" | "branch" | "agent";
 /** What a sidebar workspace row shows in the space to the right of its title. */
 export type SidebarWorkspaceTrailing = "diff" | "timestamp" | "none";
 export type ToolCallDetailLevel = "overview" | "detailed";
 
 const VALID_THEMES = new Set<string>([...Object.keys(THEME_TO_UNISTYLES), "auto"]);
 const VALID_SERVICE_URL_BEHAVIORS = new Set<ServiceUrlBehavior>(["ask", "in-app", "external"]);
-const VALID_WORKSPACE_TITLE_SOURCES = new Set<WorkspaceTitleSource>(["title", "branch", "agent"]);
 const VALID_SIDEBAR_WORKSPACE_TRAILINGS = new Set<SidebarWorkspaceTrailing>([
   "diff",
   "timestamp",
@@ -59,7 +57,6 @@ export interface AppSettings {
   uiFontSize: number; // clamped px, default 16
   codeFontSize: number; // clamped px, default 12
   syntaxTheme: SyntaxThemeId; // default "one"
-  workspaceTitleSource: WorkspaceTitleSource;
   sidebarWorkspaceTrailing: SidebarWorkspaceTrailing;
   sidebarRowItems: SidebarRowItems;
   sidebarChecksDisplay: SidebarChecksDisplay;
@@ -95,7 +92,6 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   uiFontSize: DEFAULT_UI_FONT_SIZE,
   codeFontSize: DEFAULT_CODE_FONT_SIZE,
   syntaxTheme: "one",
-  workspaceTitleSource: "title",
   sidebarWorkspaceTrailing: "diff",
   sidebarRowItems: DEFAULT_SIDEBAR_ROW_ITEMS,
   sidebarChecksDisplay: DEFAULT_SIDEBAR_CHECKS_DISPLAY,
@@ -267,12 +263,6 @@ function pickEnumAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   }
   if (typeof stored.syntaxTheme === "string" && isSyntaxThemeId(stored.syntaxTheme)) {
     result.syntaxTheme = stored.syntaxTheme;
-  }
-  if (
-    typeof stored.workspaceTitleSource === "string" &&
-    VALID_WORKSPACE_TITLE_SOURCES.has(stored.workspaceTitleSource)
-  ) {
-    result.workspaceTitleSource = stored.workspaceTitleSource;
   }
   if (
     typeof stored.sidebarWorkspaceTrailing === "string" &&

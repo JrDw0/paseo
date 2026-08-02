@@ -152,7 +152,6 @@ import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
-import { useAppSettings } from "@/hooks/use-settings";
 import { useWorkspaceRowAgentMeta } from "@/hooks/use-workspace-row-agent-meta";
 import {
   SidebarRowAgentMetaProvider,
@@ -1940,9 +1939,6 @@ export function SidebarWorkspaceList({
   });
 
   const agentMetaByWorkspaceKey = useWorkspaceRowAgentMeta();
-  const {
-    settings: { workspaceTitleSource },
-  } = useAppSettings();
   const isCompact = useIsCompactFormFactor();
   const filterTextContext = useSidebarFilterText();
   // The compact header's filter input drives this list; desktop has no input
@@ -1967,7 +1963,6 @@ export function SidebarWorkspaceList({
         entry: workspaceEntriesByKey.get(row.workspaceKey) ?? null,
         agentMeta: agentMetaByWorkspaceKey.get(`${row.serverId}:${row.workspaceId}`) ?? null,
         hostLabel: hostLabelByServerId.get(row.serverId) ?? row.serverId,
-        workspaceTitleSource,
       });
       return sidebarWorkspaceFilterFieldsMatch(fields, normalizedQuery);
     };
@@ -1977,7 +1972,6 @@ export function SidebarWorkspaceList({
     hostLabelByServerId,
     isCompact,
     workspaceEntriesByKey,
-    workspaceTitleSource,
   ]);
 
   const content = (

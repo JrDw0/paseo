@@ -62,14 +62,6 @@ describe("loadAppSettingsFromStorage", () => {
     expect(result.language).toBe("system");
   });
 
-  it("defaults workspace title source to title when storage is empty", async () => {
-    const deps = makeDeps();
-
-    const result = await loadAppSettingsFromStorage(deps);
-
-    expect(result.workspaceTitleSource).toBe("title");
-  });
-
   it("enables the chat outline by default", async () => {
     const deps = makeDeps();
 
@@ -120,30 +112,6 @@ describe("loadAppSettingsFromStorage", () => {
     const result = await loadAppSettingsFromStorage(deps);
 
     expect(result.terminalScrollbackLines).toBe(42_000);
-  });
-
-  it("loads configured workspace title source from app settings", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ workspaceTitleSource: "branch" }),
-      }),
-    });
-
-    const result = await loadAppSettingsFromStorage(deps);
-
-    expect(result.workspaceTitleSource).toBe("branch");
-  });
-
-  it("drops an unknown workspace title source back to title", async () => {
-    const deps = makeDeps({
-      storage: createInMemoryKeyValueStorage({
-        [APP_SETTINGS_KEY]: JSON.stringify({ workspaceTitleSource: "directory" }),
-      }),
-    });
-
-    const result = await loadAppSettingsFromStorage(deps);
-
-    expect(result.workspaceTitleSource).toBe("title");
   });
 
   it("normalizes terminal scrollback lines from storage", async () => {

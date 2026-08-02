@@ -106,13 +106,12 @@ describe("resolveSidebarWorkspaceFilterFields", () => {
       entry: null,
       agentMeta: null,
       hostLabel: "MacBook",
-      workspaceTitleSource: "title",
     });
     expect(fields.label).toBe("main");
     expect(fields.provider).toBeNull();
   });
 
-  it("uses the agent title for the label in agent mode", () => {
+  it("uses the agent title for the label", () => {
     const fields = resolveSidebarWorkspaceFilterFields({
       row,
       entry,
@@ -122,7 +121,6 @@ describe("resolveSidebarWorkspaceFilterFields", () => {
         agentTitle: "Review the sidebar rework",
       },
       hostLabel: "MacBook",
-      workspaceTitleSource: "agent",
     });
     expect(fields.label).toBe("Review the sidebar rework");
     expect(fields.provider).toBe("claude");
@@ -139,7 +137,6 @@ describe("resolveSidebarWorkspaceFilterFields", () => {
         agentTitle: "Review the sidebar rework",
       },
       hostLabel: "MacBook",
-      workspaceTitleSource: "agent",
     });
     expect(fields.label).toBe("My custom workspace");
   });

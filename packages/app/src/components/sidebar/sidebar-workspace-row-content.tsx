@@ -16,7 +16,6 @@ import {
   hasSidebarWorkspaceTrailing,
   type SidebarWorkspaceTrailing,
 } from "@/components/sidebar/workspace-trailing";
-import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { getStatusDotColor, isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
@@ -40,6 +39,8 @@ const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.for
 const needsInputColorMapping = (theme: Theme) => ({
   color: getStatusDotColor({ theme, bucket: "needs_input" }) ?? undefined,
 });
+const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
+const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
 
 const ThemedCircleAlert = withUnistyles(CircleAlert);
 const ThemedMonitor = withUnistyles(Monitor);
@@ -151,13 +152,9 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   reserveIdleStatusIndicatorSpace?: boolean;
   children?: ReactNode;
 }) {
-  const {
-    settings: { workspaceTitleSource },
-  } = useAppSettings();
   const agentMeta = useSidebarRowAgentMeta(workspace.serverId, workspace.workspaceId);
   const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({
     workspace,
-    workspaceTitleSource,
     agentTitle: agentMeta?.agentTitle ?? null,
   });
   const workspaceBranchTextStyle = useMemo(
@@ -199,6 +196,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
               </Text>
             </View>
             <View style={[sidebarWorkspaceRowStyles.rowRight, styles.workspaceTitleRowRight]}>
+              <WorkspaceWorktreeBranchBadge workspace={workspace} />
               <WorkspaceAgentActivity meta={agentMeta} />
               {children}
             </View>
@@ -235,6 +233,23 @@ function WorkspaceAgentActivity({ meta }: { meta: ReturnType<typeof useSidebarRo
     <Text style={styles.workspaceAgentActivity} numberOfLines={1}>
       {formatTimeAgo(meta.lastActivityAt)}
     </Text>
+  );
+}
+
+function WorkspaceWorktreeBranchBadge({ workspace }: { workspace: SidebarWorkspaceEntry }) {
+  // Worktrees are identified by their branch; the general title precedence skips
+  // the branch, so surface it as a right-hand chip so the row still says which
+  // branch this worktree checks out.
+  if (workspace.workspaceKind !== "worktree" || !workspace.currentBranch) {
+    return null;
+  }
+  return (
+    <View style={styles.workspaceBranchBadge} testID="workspace-worktree-branch-badge">
+      <ThemedFolderGit2 size={12} uniProps={blueColorMapping} />
+      <Text style={styles.workspaceBranchBadgeText} numberOfLines={1}>
+        {workspace.currentBranch}
+      </Text>
+    </View>
   );
 }
 
@@ -599,6 +614,25 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
     lineHeight: 20,
     flexShrink: 0,
+  },
+  workspaceBranchBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    maxWidth: 140,
+    flexShrink: 1,
+    paddingHorizontal: theme.spacing[2],
+    height: 18,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
+  },
+  workspaceBranchBadgeText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 16,
+    flexShrink: 1,
   },
   shortcutBadgeOverlay: {
     position: "absolute",
