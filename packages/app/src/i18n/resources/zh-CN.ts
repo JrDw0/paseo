@@ -935,6 +935,7 @@ export const zhCN: TranslationResources = {
       home: "首页",
       settings: "设置",
       closeSidebar: "关闭侧边栏",
+      importRecentSessions: "导入最近会话",
     },
     help: {
       trigger: "帮助与支持",

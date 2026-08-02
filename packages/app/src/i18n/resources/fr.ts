@@ -973,6 +973,7 @@ export const fr: TranslationResources = {
       home: "Maison",
       settings: "Paramètres",
       closeSidebar: "Fermer la barre latérale",
+      importRecentSessions: "Importer une session récente",
     },
     help: {
       trigger: "Aide et assistance",

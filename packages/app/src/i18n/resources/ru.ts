@@ -965,6 +965,7 @@ export const ru: TranslationResources = {
       home: "Дом",
       settings: "Настройки",
       closeSidebar: "Закрыть боковую панель",
+      importRecentSessions: "Импортировать недавнюю сессию",
     },
     help: {
       trigger: "Помощь и поддержка",

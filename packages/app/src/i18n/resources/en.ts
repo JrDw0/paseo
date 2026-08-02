@@ -953,6 +953,7 @@ export const en = {
       home: "Home",
       settings: "Settings",
       closeSidebar: "Close sidebar",
+      importRecentSessions: "Import recent session",
     },
     help: {
       trigger: "Help and support",

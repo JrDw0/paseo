@@ -954,6 +954,7 @@ export const ja: TranslationResources = {
       home: "ホーム",
       settings: "設定",
       closeSidebar: "サイドバーを閉じる",
+      importRecentSessions: "最近のセッションをインポート",
     },
     help: {
       trigger: "ヘルプとサポート",
