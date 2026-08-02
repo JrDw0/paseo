@@ -105,7 +105,8 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     routeBottomAnchorRequest,
     isAuthoritativeHistoryReady,
     onNearBottomChange,
-    onScrollVelocityChange,
+    onScrollMovementChange,
+    onScrollInteractionChange,
     onNearHistoryStart,
     isLoadingOlderHistory,
     hasOlderHistory,
@@ -127,8 +128,8 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     contentMeasuredForKey: null as string | null,
   });
   const scrollOffsetYRef = useRef(0);
-  const scrollVelocitySampleMsRef = useRef(0);
   const isUserScrollActiveRef = useRef(false);
+  const isScrollDragActiveRef = useRef(false);
   const scrollKeyboardDismiss = useScrollKeyboardDismiss();
   const userScrollEndFrameIdRef = useRef<number | null>(null);
   const programmaticScrollEventBudgetRef = useRef(0);
@@ -409,6 +410,8 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     };
     scrollOffsetYRef.current = 0;
     isUserScrollActiveRef.current = false;
+    isScrollDragActiveRef.current = false;
+    onScrollInteractionChange?.(false);
     clearPendingUserScrollEnd();
     clearNativeViewportSettling();
     setIsNativeViewportSettling(false);
@@ -434,6 +437,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     clearNativeViewportSettling,
     clearPendingUserScrollEnd,
     evaluateHistoryStart,
+    onScrollInteractionChange,
   ]);
 
   useEffect(() => {
@@ -502,16 +506,12 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const handleScroll = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const previousOffsetY = scrollOffsetYRef.current;
+    const scrollDeltaY = contentOffset.y - previousOffsetY;
     scrollOffsetYRef.current = contentOffset.y;
     scrollKeyboardDismiss.onScroll(event);
 
-    if (onScrollVelocityChange) {
-      const now = Date.now();
-      const elapsedMs = now - scrollVelocitySampleMsRef.current;
-      scrollVelocitySampleMsRef.current = now;
-      if (elapsedMs > 0) {
-        onScrollVelocityChange(((contentOffset.y - previousOffsetY) / elapsedMs) * 1000);
-      }
+    if (scrollDeltaY !== 0) {
+      onScrollMovementChange?.(scrollDeltaY);
     }
 
     streamViewportMetricsRef.current = {
@@ -539,7 +539,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       programmaticScrollEventBudgetRef.current = 0;
       bottomAnchorController.handleScrollNearBottomChange({
         nextIsNearBottom: nearBottom,
-        scrollDelta: contentOffset.y - previousOffsetY,
+        scrollDelta: scrollDeltaY,
       });
     }
   });
@@ -547,6 +547,8 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const handleScrollBeginDrag = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     clearPendingUserScrollEnd();
     isUserScrollActiveRef.current = true;
+    isScrollDragActiveRef.current = true;
+    updateScrollInteraction();
     scrollKeyboardDismiss.onScrollBeginDrag(event);
     bottomAnchorController.beginUserScroll();
     const rearmed = rearmHistoryStartPagination(historyStartPaginationStateRef.current);
@@ -557,11 +559,17 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     }
   });
 
+  const updateScrollInteraction = useStableEvent(() => {
+    onScrollInteractionChange?.(isScrollDragActiveRef.current);
+  });
+
   // Defer drag end so momentum can take ownership, but capture the terminal
   // gesture position now because layout may move the viewport in the meantime.
   const handleScrollEndDrag = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const isNearBottom = isScrollEventNearBottom(event);
     scrollKeyboardDismiss.onScrollEndDrag(event);
+    isScrollDragActiveRef.current = false;
+    updateScrollInteraction();
 
     clearPendingUserScrollEnd();
     userScrollEndFrameIdRef.current = requestAnimationFrame(() => {

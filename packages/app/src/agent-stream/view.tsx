@@ -301,7 +301,8 @@ function useRetainedValue<T>(value: T, active: boolean): T {
 }
 const EMPTY_PENDING_MESSAGE_SUBMISSIONS: readonly PendingMessageSubmission[] = [];
 const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
-const SCROLL_MOTION_VELOCITY_PX_PER_S = 150;
+// Floating actions return after this much idle time once the scroll interaction
+// has ended.
 const SCROLL_SETTLE_DELAY_MS = 300;
 const FLOATING_ACTIONS_TRANSITION_MS = 180;
 
@@ -463,24 +464,21 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ? undefined
       : FadeOut.duration(200);
 
-    // The floating bottom-right actions hide while the conversation is in motion
-    // and reappear once it settles. Scroll velocity is reported by the active
-    // strategy; visibility lives in refs so the event callback stays referentially
-    // stable across renders (no scroll-listener churn).
-    //
-    // We do not try to reveal on a specific low-velocity event (that flickers near
-    // the threshold and leaves the buttons hidden when a programmatic jump lands on
-    // a high-velocity frame). Instead every scroll event re-arms a settle timer: the
-    // actions hide on the first real motion and reappear SCROLL_SETTLE_DELAY_MS after
-    // the last motion, whether that last motion was a slow settle frame or a jump.
+    // Show only after real movement has stopped and the user has released the
+    // viewport. The strategy reports direct interaction and scroll deltas; this
+    // layer owns the one settle timer.
     const floatingActionsHiddenRef = useRef(false);
     const [floatingActionsHidden, setFloatingActionsHidden] = useState(false);
     const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const scrollInteractionActiveRef = useRef(false);
 
     const showFloatingActions = useCallback(() => {
       if (scrollSettleTimerRef.current) {
         clearTimeout(scrollSettleTimerRef.current);
         scrollSettleTimerRef.current = null;
+      }
+      if (scrollInteractionActiveRef.current) {
+        return;
       }
       if (floatingActionsHiddenRef.current) {
         floatingActionsHiddenRef.current = false;
@@ -488,17 +486,39 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       }
     }, []);
 
-    const handleScrollVelocity = useCallback(
-      (velocity: number) => {
-        if (
-          Math.abs(velocity) >= SCROLL_MOTION_VELOCITY_PX_PER_S &&
-          !floatingActionsHiddenRef.current
-        ) {
+    const handleScrollInteractionChange = useCallback(
+      (active: boolean) => {
+        scrollInteractionActiveRef.current = active;
+        if (scrollSettleTimerRef.current) {
+          clearTimeout(scrollSettleTimerRef.current);
+          scrollSettleTimerRef.current = null;
+        }
+        if (active) {
+          // A pointer or touch is still held, so stationary pauses must not
+          // reveal the actions mid-drag.
+          return;
+        }
+        if (floatingActionsHiddenRef.current) {
+          scrollSettleTimerRef.current = setTimeout(showFloatingActions, SCROLL_SETTLE_DELAY_MS);
+        }
+      },
+      [showFloatingActions],
+    );
+
+    const handleScrollMovement = useCallback(
+      (deltaPx: number) => {
+        if (deltaPx === 0) {
+          return;
+        }
+        if (!floatingActionsHiddenRef.current) {
           floatingActionsHiddenRef.current = true;
           setFloatingActionsHidden(true);
         }
         if (scrollSettleTimerRef.current) {
           clearTimeout(scrollSettleTimerRef.current);
+        }
+        if (scrollInteractionActiveRef.current) {
+          return;
         }
         scrollSettleTimerRef.current = setTimeout(showFloatingActions, SCROLL_SETTLE_DELAY_MS);
       },
@@ -1267,7 +1287,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               isAuthoritativeHistoryReady,
               onNearBottomChange: setIsNearBottom,
               onReadingPositionChange: chatOutline.reportReadingPosition,
-              onScrollVelocityChange: handleScrollVelocity,
+              onScrollMovementChange: handleScrollMovement,
+              onScrollInteractionChange: handleScrollInteractionChange,
               onNearHistoryStart: loadOlder,
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,
@@ -1286,6 +1307,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           <Animated.View
             style={[stylesheet.floatingActionsContainer, floatingActionsAnimatedStyle]}
             pointerEvents={floatingActionsHidden ? "none" : "box-none"}
+            testID="agent-stream-floating-actions"
           >
             {messageJumpEntries.length > 0 && (
               <Pressable

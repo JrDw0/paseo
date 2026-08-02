@@ -41,7 +41,6 @@ export interface StreamEdgeSlotProps {
 
 export interface StreamViewportHandle {
   scrollToBottom: (reason?: BottomAnchorLocalRequest["reason"]) => void;
-  scrollToMessage: (messageId: string) => void;
   prepareForViewportChange: () => void;
   scrollToMessage?: (itemId: string) => void;
 }
@@ -74,7 +73,8 @@ export interface StreamRenderInput {
   // The history row under the top of the viewport, for surfaces that mark where the reader
   // is in the transcript. Only the web viewport measures it today.
   onReadingPositionChange?: (rowId: string | null) => void;
-  onScrollVelocityChange?: (velocityPxPerSec: number) => void;
+  onScrollMovementChange?: (deltaPx: number) => void;
+  onScrollInteractionChange?: (active: boolean) => void;
   onNearHistoryStart: () => boolean | Promise<boolean>;
   isLoadingOlderHistory: boolean;
   hasOlderHistory: boolean;

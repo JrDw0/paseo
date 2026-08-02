@@ -53,6 +53,19 @@ function createRenderers(onRowRender: () => void): StreamSegmentRenderers {
   };
 }
 
+function dispatchTouchEvent(
+  target: HTMLElement,
+  type: "touchstart" | "touchend" | "touchcancel",
+  touches: Array<{ clientY: number }>,
+): void {
+  const event = new Event(type, { bubbles: true });
+  Object.defineProperty(event, "touches", {
+    configurable: true,
+    value: touches,
+  });
+  target.dispatchEvent(event);
+}
+
 describe("createWebStreamStrategy", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -1243,5 +1256,168 @@ describe("createWebStreamStrategy", () => {
     });
     expect(container.querySelector('[data-testid="agent-chat-scroll"]')).toBe(scrollContainer);
     expect(scrollTo).toHaveBeenCalledWith({ top: 2200, behavior: "auto" });
+  });
+
+  it("keeps scroll interaction active until the final touch ends", () => {
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: true });
+    const viewportRef = React.createRef<StreamViewportHandle>();
+    const onScrollInteractionChange = vi.fn();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        strategy.render({
+          agentId: "agent",
+          segments: {
+            historyVirtualized: [],
+            historyMounted: [userMessage(1)],
+            liveHead: [],
+          },
+          boundary: {
+            hasVirtualizedHistory: false,
+            hasMountedHistory: true,
+            hasLiveHead: false,
+          },
+          renderers: createRenderers(vi.fn()),
+          listEmptyComponent: null,
+          viewportRef,
+          routeBottomAnchorRequest: null,
+          isAuthoritativeHistoryReady: true,
+          onNearBottomChange: vi.fn(),
+          onScrollInteractionChange,
+          onNearHistoryStart: vi.fn(),
+          isLoadingOlderHistory: false,
+          hasOlderHistory: false,
+          olderHistoryProgressKey: null,
+          scrollEnabled: true,
+          listStyle: null,
+          baseListContentContainerStyle: null,
+          forwardListContentContainerStyle: null,
+        }),
+      );
+    });
+
+    const scrollContainer = container.querySelector('[data-testid="agent-chat-scroll"]');
+    if (!(scrollContainer instanceof HTMLElement)) {
+      throw new Error("Expected agent chat scroll container");
+    }
+
+    dispatchTouchEvent(scrollContainer, "touchstart", [{ clientY: 100 }]);
+    dispatchTouchEvent(scrollContainer, "touchstart", [{ clientY: 100 }, { clientY: 200 }]);
+    dispatchTouchEvent(scrollContainer, "touchend", [{ clientY: 200 }]);
+
+    expect(onScrollInteractionChange).not.toHaveBeenLastCalledWith(false);
+
+    dispatchTouchEvent(scrollContainer, "touchend", []);
+
+    expect(onScrollInteractionChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("releases a touch interaction when the finger leaves the viewport", () => {
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: true });
+    const viewportRef = React.createRef<StreamViewportHandle>();
+    const onScrollInteractionChange = vi.fn();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        strategy.render({
+          agentId: "agent",
+          segments: {
+            historyVirtualized: [],
+            historyMounted: [userMessage(1)],
+            liveHead: [],
+          },
+          boundary: {
+            hasVirtualizedHistory: false,
+            hasMountedHistory: true,
+            hasLiveHead: false,
+          },
+          renderers: createRenderers(vi.fn()),
+          listEmptyComponent: null,
+          viewportRef,
+          routeBottomAnchorRequest: null,
+          isAuthoritativeHistoryReady: true,
+          onNearBottomChange: vi.fn(),
+          onScrollInteractionChange,
+          onNearHistoryStart: vi.fn(),
+          isLoadingOlderHistory: false,
+          hasOlderHistory: false,
+          olderHistoryProgressKey: null,
+          scrollEnabled: true,
+          listStyle: null,
+          baseListContentContainerStyle: null,
+          forwardListContentContainerStyle: null,
+        }),
+      );
+    });
+
+    const scrollContainer = container.querySelector('[data-testid="agent-chat-scroll"]');
+    if (!(scrollContainer instanceof HTMLElement)) {
+      throw new Error("Expected agent chat scroll container");
+    }
+
+    dispatchTouchEvent(scrollContainer, "touchstart", [{ clientY: 100 }]);
+    dispatchTouchEvent(document.body, "touchend", []);
+
+    expect(onScrollInteractionChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("releases scroll interaction when switching agents", () => {
+    const strategy = createWebStreamStrategy({ isMobileBreakpoint: true });
+    const viewportRef = React.createRef<StreamViewportHandle>();
+    const onScrollInteractionChange = vi.fn();
+    const renderInput: StreamRenderInput = {
+      agentId: "agent-1",
+      segments: {
+        historyVirtualized: [],
+        historyMounted: [userMessage(1)],
+        liveHead: [],
+      },
+      boundary: {
+        hasVirtualizedHistory: false,
+        hasMountedHistory: true,
+        hasLiveHead: false,
+      },
+      renderers: createRenderers(vi.fn()),
+      listEmptyComponent: null,
+      viewportRef,
+      routeBottomAnchorRequest: null,
+      isAuthoritativeHistoryReady: true,
+      onNearBottomChange: vi.fn(),
+      onScrollInteractionChange,
+      onNearHistoryStart: vi.fn(),
+      isLoadingOlderHistory: false,
+      hasOlderHistory: false,
+      olderHistoryProgressKey: null,
+      scrollEnabled: true,
+      listStyle: null,
+      baseListContentContainerStyle: null,
+      forwardListContentContainerStyle: null,
+    };
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(strategy.render(renderInput));
+    });
+
+    const scrollContainer = container.querySelector('[data-testid="agent-chat-scroll"]');
+    if (!(scrollContainer instanceof HTMLElement)) {
+      throw new Error("Expected agent chat scroll container");
+    }
+    dispatchTouchEvent(scrollContainer, "touchstart", [{ clientY: 100 }]);
+    onScrollInteractionChange.mockClear();
+
+    act(() => {
+      root?.render(strategy.render({ ...renderInput, agentId: "agent-2" }));
+    });
+
+    expect(onScrollInteractionChange).toHaveBeenLastCalledWith(false);
   });
 });
