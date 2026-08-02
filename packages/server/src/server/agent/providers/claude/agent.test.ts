@@ -1274,6 +1274,67 @@ describe("ClaudeAgentClient.listImportableSessions", () => {
       await fs.rm(tmpConfigDir, { recursive: true, force: true });
     }
   });
+
+  test("prefers the Claude session's ai-title over the first prompt as the title", async () => {
+    const tmpConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), "paseo-claude-import-"));
+    const previousConfigDir = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = tmpConfigDir;
+
+    try {
+      const sessionId = "session-ai-title";
+      const cwd = "/tmp/paseo-test-claude-ai-title";
+      const sanitized = cwd.replace(/[\\/._:]/g, "-");
+      const projectDir = path.join(tmpConfigDir, "projects", sanitized);
+      await fs.mkdir(projectDir, { recursive: true });
+      const file = path.join(projectDir, `${sessionId}.jsonl`);
+      await fs.writeFile(
+        file,
+        [
+          JSON.stringify({
+            type: "ai-title",
+            aiTitle: "adb安装刚构建的包",
+            sessionId,
+          }),
+          JSON.stringify({
+            isSidechain: false,
+            type: "user",
+            message: { role: "user", content: "帮我安装刚构建的apk" },
+            cwd,
+            sessionId,
+          }),
+        ].join("\n"),
+        "utf-8",
+      );
+      await fs.utimes(
+        file,
+        new Date("2026-06-20T09:00:00.000Z"),
+        new Date("2026-06-20T09:00:00.000Z"),
+      );
+
+      const client = new ClaudeAgentClient({
+        logger: createTestLogger(),
+        resolveBinary: async () => "/test/claude/bin",
+      });
+
+      await expect(client.listImportableSessions({ limit: 1 })).resolves.toEqual([
+        {
+          providerHandleId: sessionId,
+          cwd,
+          title: "adb安装刚构建的包",
+          firstPromptPreview: "帮我安装刚构建的apk",
+          lastPromptPreview: "帮我安装刚构建的apk",
+          lastActivityAt: new Date("2026-06-20T09:00:00.000Z"),
+        },
+      ]);
+    } finally {
+      if (previousConfigDir === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = previousConfigDir;
+      }
+      await fs.rm(tmpConfigDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("ClaudeAgentSession context window usage", () => {
