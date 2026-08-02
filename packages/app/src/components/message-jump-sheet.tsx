@@ -15,6 +15,7 @@ import {
   type BottomSheetBackgroundProps,
 } from "@gorhom/bottom-sheet";
 import { Image as ImageIcon, X } from "lucide-react-native";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   IsolatedBottomSheetModal,
   useIsolatedBottomSheetVisibility,
@@ -23,14 +24,17 @@ import type { Theme } from "@/styles/theme";
 
 const ThemedX = withUnistyles(X);
 const ThemedImageIcon = withUnistyles(ImageIcon);
+const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 /**
- * A row of already-loaded user messages the viewport can jump to. The parent
- * formats the preview and the relative timestamp so the sheet stays presentational.
+ * A row of user messages the viewport can jump to. The parent formats the
+ * preview and the relative timestamp so the sheet stays presentational. `seq`
+ * is the timeline row's global sequence, used to back-fill rows not yet loaded.
  */
 export interface MessageJumpEntry {
   id: string;
+  seq: number;
   preview: string;
   timestampLabel: string;
   hasImages: boolean;
@@ -39,7 +43,8 @@ export interface MessageJumpEntry {
 interface MessageJumpSheetProps {
   visible: boolean;
   entries: MessageJumpEntry[];
-  onSelect: (messageId: string) => void;
+  loading?: boolean;
+  onSelect: (entry: MessageJumpEntry) => void;
   onClose: () => void;
 }
 
@@ -56,9 +61,9 @@ function MessageJumpRow({
   onSelect,
 }: {
   entry: MessageJumpEntry;
-  onSelect: (id: string) => void;
+  onSelect: (entry: MessageJumpEntry) => void;
 }) {
-  const handlePress = useCallback(() => onSelect(entry.id), [entry.id, onSelect]);
+  const handlePress = useCallback(() => onSelect(entry), [entry, onSelect]);
   const rowStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [styles.row, pressed && styles.rowPressed],
     [],
@@ -86,7 +91,13 @@ function MessageJumpRow({
  * used as the mobile-friendly take on ChatGPT's message minimap: tap a row to
  * scroll the stream to that message.
  */
-export function MessageJumpSheet({ visible, entries, onSelect, onClose }: MessageJumpSheetProps) {
+export function MessageJumpSheet({
+  visible,
+  entries,
+  loading,
+  onSelect,
+  onClose,
+}: MessageJumpSheetProps) {
   const { t } = useTranslation();
   const snapPoints = useMemo(() => ["40%", "70%"], []);
 
@@ -132,10 +143,14 @@ export function MessageJumpSheet({ visible, entries, onSelect, onClose }: Messag
   const emptyState = useMemo(
     () => (
       <View style={styles.empty}>
-        <Text style={styles.emptyText}>{t("agentStream.messageJump.empty")}</Text>
+        {loading ? (
+          <ThemedLoadingSpinner size="small" uniProps={mutedColorMapping} />
+        ) : (
+          <Text style={styles.emptyText}>{t("agentStream.messageJump.empty")}</Text>
+        )}
       </View>
     ),
-    [t],
+    [loading, t],
   );
 
   return (

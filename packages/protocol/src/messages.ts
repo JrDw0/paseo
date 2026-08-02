@@ -1399,6 +1399,10 @@ export const FetchAgentTimelineRequestMessageSchema = z.object({
   limit: z.number().int().nonnegative().optional(),
   // Default should be projected for app timeline loading.
   projection: z.enum(["projected", "canonical"]).optional(),
+  // When "user", the daemon returns only user_message entries so a compact
+  // message index ships O(user messages) instead of the full projected
+  // conversation. Additive and optional; older clients/daemons are unchanged.
+  messageKind: z.literal("user").optional(),
 });
 
 export const ProviderSubagentListRequestMessageSchema = z.object({

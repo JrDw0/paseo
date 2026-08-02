@@ -187,6 +187,7 @@ export const ptBR: TranslationResources = {
   agentStream: {
     empty: "Comece a conversar com este agente...",
     scrollToBottom: "Rolar para o fim",
+    refresh: "Atualizar conversa",
     messageJump: {
       button: "Ir para uma mensagem",
       title: "Suas mensagens",

@@ -187,6 +187,7 @@ export const zhCN: TranslationResources = {
   agentStream: {
     empty: "开始和这个 Agent 对话...",
     scrollToBottom: "滚动到底部",
+    refresh: "刷新会话",
     messageJump: {
       button: "跳转到消息",
       title: "我的消息",

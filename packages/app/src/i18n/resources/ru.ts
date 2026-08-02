@@ -187,6 +187,7 @@ export const ru: TranslationResources = {
   agentStream: {
     empty: "Начните общаться с этим агентом...",
     scrollToBottom: "Прокрутить вниз",
+    refresh: "Обновить беседу",
     messageJump: {
       button: "Перейти к сообщению",
       title: "Ваши сообщения",

@@ -189,6 +189,7 @@ export const fr: TranslationResources = {
   agentStream: {
     empty: "Commencez à discuter avec cet agent...",
     scrollToBottom: "Faire défiler vers le bas",
+    refresh: "Actualiser la conversation",
     messageJump: {
       button: "Aller à un message",
       title: "Vos messages",

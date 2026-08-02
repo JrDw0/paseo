@@ -115,6 +115,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     routeBottomAnchorRequest,
     isAuthoritativeHistoryReady,
     onNearBottomChange,
+    onScrollVelocityChange,
     onNearHistoryStart,
     isLoadingOlderHistory,
     hasOlderHistory,
@@ -138,6 +139,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     return value;
   };
   const lastKnownScrollTopRef = useRef(0);
+  const scrollVelocitySampleMsRef = useRef(0);
   const pendingUserScrollUpIntentRef = useRef(false);
   const isPointerScrollActiveRef = useRef(false);
   const lastTouchClientYRef = useRef<number | null>(null);
@@ -328,10 +330,24 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       }
     }
 
+    const scrollDeltaY = currentScrollTop - lastKnownScrollTopRef.current;
     lastKnownScrollTopRef.current = currentScrollTop;
+    if (onScrollVelocityChange) {
+      const now = Date.now();
+      const elapsedMs = now - scrollVelocitySampleMsRef.current;
+      scrollVelocitySampleMsRef.current = now;
+      if (elapsedMs > 0) {
+        onScrollVelocityChange((scrollDeltaY / elapsedMs) * 1000);
+      }
+    }
     updateScrollMetrics();
     evaluateHistoryStart();
-  }, [cancelPendingStickToBottom, evaluateHistoryStart, updateScrollMetrics]);
+  }, [
+    cancelPendingStickToBottom,
+    evaluateHistoryStart,
+    onScrollVelocityChange,
+    updateScrollMetrics,
+  ]);
 
   useEffect(() => {
     historyStartPaginationStateRef.current = createHistoryStartPaginationState();

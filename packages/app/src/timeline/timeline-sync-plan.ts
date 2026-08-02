@@ -78,6 +78,18 @@ export function planTimelineTailFetch() {
   } as const;
 }
 
+// A single tail fetch with an unbounded limit returns every projected timeline row
+// in one shot (daemon `selectAll`). Filtering to user messages keeps the payload
+// proportional to the number of user turns instead of the whole conversation.
+export function planTimelineFullIndexFetch() {
+  return {
+    direction: "tail",
+    limit: 0,
+    projection: "projected",
+    messageKind: "user",
+  } as const;
+}
+
 export function planTimelineOlderFetch(cursor: TimelineSyncCursor) {
   return {
     direction: "before",

@@ -562,6 +562,7 @@ export interface FetchAgentTimelineOptions {
   cursor?: FetchAgentTimelineCursor;
   limit?: number;
   projection?: FetchAgentTimelineProjection;
+  messageKind?: "user";
   requestId?: string;
   timeout?: number;
 }
@@ -2738,6 +2739,7 @@ export class DaemonClient {
       ...(options.cursor ? { cursor: options.cursor } : {}),
       ...(typeof options.limit === "number" ? { limit: options.limit } : {}),
       ...(options.projection ? { projection: options.projection } : {}),
+      ...(options.messageKind ? { messageKind: options.messageKind } : {}),
     });
 
     const payload = await this.sendRequest({

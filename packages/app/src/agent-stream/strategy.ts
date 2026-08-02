@@ -70,6 +70,7 @@ export interface StreamRenderInput {
   routeBottomAnchorRequest: BottomAnchorRouteRequest | null;
   isAuthoritativeHistoryReady: boolean;
   onNearBottomChange: (value: boolean) => void;
+  onScrollVelocityChange?: (velocityPxPerSec: number) => void;
   onNearHistoryStart: () => void;
   isLoadingOlderHistory: boolean;
   hasOlderHistory: boolean;

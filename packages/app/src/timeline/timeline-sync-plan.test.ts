@@ -4,6 +4,7 @@ import {
   isTimelineCatchUpComplete,
   planInitialAgentTimelineSync,
   planResumeTimelineSync,
+  planTimelineFullIndexFetch,
   planTimelineOlderFetch,
 } from "./timeline-sync-plan";
 
@@ -73,5 +74,14 @@ describe("timeline sync planning", () => {
     expect(isTimelineCatchUpComplete({ direction: "after", hasNewer: false, error: null })).toBe(
       true,
     );
+  });
+
+  test("full-index fetch requests the whole timeline but only user messages", () => {
+    expect(planTimelineFullIndexFetch()).toEqual({
+      direction: "tail",
+      limit: 0,
+      projection: "projected",
+      messageKind: "user",
+    });
   });
 });

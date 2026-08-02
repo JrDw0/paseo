@@ -185,6 +185,7 @@ export const en = {
   agentStream: {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
+    refresh: "Refresh conversation",
     messageJump: {
       button: "Jump to a message",
       title: "Your messages",

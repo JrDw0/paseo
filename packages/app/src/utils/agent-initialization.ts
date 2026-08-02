@@ -7,7 +7,7 @@ export interface DeferredInit {
 }
 
 const initPromises = new Map<string, DeferredInit>();
-export const INIT_TIMEOUT_MS = 65_000;
+export const INIT_TIMEOUT_MS = 30_000;
 
 export function getInitKey(serverId: string, agentId: string): string {
   return `${serverId}:${agentId}`;

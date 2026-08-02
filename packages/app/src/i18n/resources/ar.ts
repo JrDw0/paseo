@@ -187,6 +187,7 @@ export const ar: TranslationResources = {
   agentStream: {
     empty: "ابدأ الدردشة مع هذا الوكيل...",
     scrollToBottom: "قم بالتمرير إلى الأسفل",
+    refresh: "تحديث المحادثة",
     messageJump: {
       button: "الانتقال إلى رسالة",
       title: "رسائلك",

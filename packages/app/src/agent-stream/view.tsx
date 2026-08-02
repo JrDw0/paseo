@@ -25,8 +25,14 @@ import {
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { Check, ChevronDown, List, X } from "lucide-react-native";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { Check, ChevronDown, List, RefreshCw, X } from "lucide-react-native";
 import { usePanelStore } from "@/stores/panel-store";
 import {
   AssistantMessage,
@@ -59,6 +65,10 @@ import { QuestionFormCard } from "@/components/question-form-card";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import { MessageJumpSheet, type MessageJumpEntry } from "@/components/message-jump-sheet";
 import { formatTimeAgo } from "@/utils/time";
+import { useMessageJumpIndex } from "@/hooks/use-message-jump-index";
+import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
+import { decideMessageJump } from "./jump-decision";
+import { driveJumpBackfill } from "./jump-backfill";
 import {
   prepareToolCallHistory,
   projectToolCallDetailLevel,
@@ -187,6 +197,7 @@ function renderListEmptyComponent(input: {
   renderModel: AgentStreamRenderModel;
   emptyStateStyle: StyleProp<ViewStyle>;
   emptyText: string;
+  isAuthoritativeHistoryReady: boolean;
 }): ReactNode {
   if (
     input.renderModel.boundary.hasVirtualizedHistory ||
@@ -196,6 +207,14 @@ function renderListEmptyComponent(input: {
     input.renderModel.auxiliary.turnFooter
   ) {
     return null;
+  }
+
+  if (!input.isAuthoritativeHistoryReady) {
+    return (
+      <View style={input.emptyStateStyle}>
+        <ThemedLoadingSpinner size="small" uniProps={mutedColorMapping} />
+      </View>
+    );
   }
 
   return (
@@ -269,6 +288,66 @@ const AGENT_CAPABILITY_FLAG_KEYS: (keyof AgentCapabilityFlags)[] = [
 
 const EMPTY_STREAM_HEAD: StreamItem[] = [];
 const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
+const SCROLL_MOTION_VELOCITY_PX_PER_S = 150;
+const SCROLL_SETTLE_DELAY_MS = 300;
+const FLOATING_ACTIONS_TRANSITION_MS = 180;
+
+interface LoadedMessageLabel {
+  imageMessage: string;
+  attachmentMessage: string;
+}
+
+function loweredImageFlags(combined: StreamItem[]): Map<string, boolean> {
+  const flags = new Map<string, boolean>();
+  const seen = new Set<string>();
+  for (const item of combined) {
+    if (item.kind !== "user_message" || seen.has(item.id)) {
+      continue;
+    }
+    seen.add(item.id);
+    flags.set(item.id, (item.images?.length ?? 0) > 0);
+  }
+  return flags;
+}
+
+function buildLoadedFallbackJumpEntries(
+  combined: StreamItem[],
+  labels: LoadedMessageLabel,
+  formatTimestamp: (date: Date) => string,
+): MessageJumpEntry[] {
+  const seen = new Set<string>();
+  const entries: MessageJumpEntry[] = [];
+  for (const item of combined) {
+    if (item.kind !== "user_message" || seen.has(item.id)) {
+      continue;
+    }
+    seen.add(item.id);
+    const firstLine = item.text
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 0);
+    const hasImages = (item.images?.length ?? 0) > 0;
+    const hasAttachments = (item.attachments?.length ?? 0) > 0;
+    let preview: string;
+    if (firstLine) {
+      preview = firstLine;
+    } else if (hasImages) {
+      preview = labels.imageMessage;
+    } else if (hasAttachments) {
+      preview = labels.attachmentMessage;
+    } else {
+      preview = "…";
+    }
+    entries.push({
+      id: item.id,
+      seq: -1,
+      preview,
+      timestampLabel: formatTimestamp(item.timestamp),
+      hasImages,
+    });
+  }
+  return entries;
+}
 
 function buildChatHistoryAttachment(input: {
   draftId: string;
@@ -409,6 +488,102 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const scrollIndicatorFadeOut = shouldDisableEntryExitAnimations
       ? undefined
       : FadeOut.duration(200);
+
+    // The floating bottom-right actions hide while the conversation is in motion
+    // and reappear once it settles. Scroll velocity is reported by the active
+    // strategy; visibility lives in refs so the event callback stays referentially
+    // stable across renders (no scroll-listener churn).
+    //
+    // We do not try to reveal on a specific low-velocity event (that flickers near
+    // the threshold and leaves the buttons hidden when a programmatic jump lands on
+    // a high-velocity frame). Instead every scroll event re-arms a settle timer: the
+    // actions hide on the first real motion and reappear SCROLL_SETTLE_DELAY_MS after
+    // the last motion, whether that last motion was a slow settle frame or a jump.
+    const floatingActionsHiddenRef = useRef(false);
+    const [floatingActionsHidden, setFloatingActionsHidden] = useState(false);
+    const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const showFloatingActions = useCallback(() => {
+      if (scrollSettleTimerRef.current) {
+        clearTimeout(scrollSettleTimerRef.current);
+        scrollSettleTimerRef.current = null;
+      }
+      if (floatingActionsHiddenRef.current) {
+        floatingActionsHiddenRef.current = false;
+        setFloatingActionsHidden(false);
+      }
+    }, []);
+
+    const handleScrollVelocity = useCallback(
+      (velocity: number) => {
+        if (
+          Math.abs(velocity) >= SCROLL_MOTION_VELOCITY_PX_PER_S &&
+          !floatingActionsHiddenRef.current
+        ) {
+          floatingActionsHiddenRef.current = true;
+          setFloatingActionsHidden(true);
+        }
+        if (scrollSettleTimerRef.current) {
+          clearTimeout(scrollSettleTimerRef.current);
+        }
+        scrollSettleTimerRef.current = setTimeout(showFloatingActions, SCROLL_SETTLE_DELAY_MS);
+      },
+      [showFloatingActions],
+    );
+
+    useEffect(
+      () => () => {
+        if (scrollSettleTimerRef.current) {
+          clearTimeout(scrollSettleTimerRef.current);
+        }
+      },
+      [],
+    );
+
+    const floatingActionsReveal = useSharedValue(1);
+    useEffect(() => {
+      floatingActionsReveal.value = withTiming(floatingActionsHidden ? 0 : 1, {
+        duration: FLOATING_ACTIONS_TRANSITION_MS,
+      });
+    }, [floatingActionsHidden, floatingActionsReveal]);
+    const floatingActionsAnimatedStyle = useAnimatedStyle(() => ({
+      opacity: floatingActionsReveal.value,
+      transform: [{ translateY: (1 - floatingActionsReveal.value) * 14 }],
+    }));
+
+    // Manual timeline refresh. Re-running `refreshAgent` bumps the daemon's
+    // epoch so a tail fetch with the current cursor returns reset:true and the
+    // store path (fetch_agent_timeline_response -> applyTimelineResponse) drops
+    // and replaces the tail. Without the epoch bump an incremental fetch would
+    // discard new-epoch rows against the stale cursor and nothing would update.
+    const refreshClient = useHostRuntimeClient(resolvedServerId);
+    const [isRefreshingTimeline, setIsRefreshingTimeline] = useState(false);
+    const isRefreshingRef = useRef(false);
+    const handleRefreshTimeline = useCallback(async () => {
+      if (!refreshClient) {
+        toast?.error(t("workspace.terminal.hostDisconnected"));
+        return;
+      }
+      if (isRefreshingRef.current) {
+        return;
+      }
+      isRefreshingRef.current = true;
+      setIsRefreshingTimeline(true);
+      try {
+        await refreshClient.refreshAgent(agentId);
+        const cursor = useSessionStore
+          .getState()
+          .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
+        await getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, {
+          direction: "tail",
+          projection: "projected",
+          ...(cursor ? { cursor: { epoch: cursor.epoch, seq: cursor.endSeq } } : {}),
+        });
+      } finally {
+        isRefreshingRef.current = false;
+        setIsRefreshingTimeline(false);
+      }
+    }, [agentId, refreshClient, resolvedServerId, t, toast]);
 
     useEffect(() => {
       setIsNearBottom(true);
@@ -631,47 +806,90 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const openMessageJumpSheet = useCallback(() => setIsMessageJumpSheetOpen(true), []);
     const closeMessageJumpSheet = useCallback(() => setIsMessageJumpSheetOpen(false), []);
 
-    // Only already-loaded user messages can be jumped to; unpaginated history
-    // stays out until a loadOlder + retry flow exists.
+    // Jump list is built from the cached full index when the sheet is open, falling
+    // back to the projected tail so the button is still meaningful before the
+    // index loads.
+    const { entries: indexEntries, ready: indexReady } = useMessageJumpIndex({
+      serverId: resolvedServerId,
+      agentId,
+      enabled: isMessageJumpSheetOpen,
+    });
     const messageJumpEntries = useMemo<MessageJumpEntry[]>(() => {
       const combined = [...projectedToolCalls.tail, ...(projectedToolCalls.head ?? [])];
-      const seen = new Set<string>();
-      const entries: MessageJumpEntry[] = [];
-      for (const item of combined) {
-        if (item.kind !== "user_message" || seen.has(item.id)) {
-          continue;
+      const hasImages = loweredImageFlags(combined);
+      if (indexEntries) {
+        const seenIndex = new Set<string>();
+        const entries: MessageJumpEntry[] = [];
+        for (const entry of indexEntries) {
+          if (seenIndex.has(entry.id)) {
+            continue;
+          }
+          seenIndex.add(entry.id);
+          entries.push({
+            id: entry.id,
+            seq: entry.seq,
+            preview: entry.preview,
+            timestampLabel: entry.timestampLabel,
+            hasImages: hasImages.get(entry.id) ?? false,
+          });
         }
-        seen.add(item.id);
-        const firstLine = item.text
-          .split("\n")
-          .map((line) => line.trim())
-          .find((line) => line.length > 0);
-        const hasImages = (item.images?.length ?? 0) > 0;
-        const hasAttachments = (item.attachments?.length ?? 0) > 0;
-        let preview: string;
-        if (firstLine) {
-          preview = firstLine;
-        } else if (hasImages) {
-          preview = t("agentStream.messageJump.imageMessage");
-        } else if (hasAttachments) {
-          preview = t("agentStream.messageJump.attachmentMessage");
-        } else {
-          preview = "…";
-        }
-        entries.push({
-          id: item.id,
-          preview,
-          timestampLabel: formatTimeAgo(item.timestamp),
-          hasImages,
-        });
+        return entries;
       }
-      return entries;
-    }, [projectedToolCalls.head, projectedToolCalls.tail, t]);
+      // No index yet: fall back to the loaded tail with the same projection shape.
+      return buildLoadedFallbackJumpEntries(
+        combined,
+        {
+          imageMessage: t("agentStream.messageJump.imageMessage"),
+          attachmentMessage: t("agentStream.messageJump.attachmentMessage"),
+        },
+        formatTimeAgo,
+      );
+    }, [indexEntries, projectedToolCalls.head, projectedToolCalls.tail, t]);
 
-    const handleJumpToMessage = useCallback((messageId: string) => {
-      setIsMessageJumpSheetOpen(false);
-      viewportRef.current?.scrollToMessage(messageId);
-    }, []);
+    const handleJumpToMessage = useCallback(
+      (entry: MessageJumpEntry) => {
+        setIsMessageJumpSheetOpen(false);
+        // Fallback rows (index not yet loaded) lack a usable seq but are by
+        // definition already rendered, so always scroll them.
+        if (entry.seq <= 0) {
+          viewportRef.current?.scrollToMessage(entry.id);
+          return;
+        }
+        const decision = decideMessageJump(entry, {
+          isSeqCovered: (seq) => {
+            const cursor = useSessionStore
+              .getState()
+              .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
+            if (!cursor) {
+              return false;
+            }
+            return seq >= cursor.startSeq && seq <= cursor.endSeq;
+          },
+        });
+        if (decision.kind === "scroll") {
+          viewportRef.current?.scrollToMessage(entry.id);
+          return;
+        }
+        // Target row not yet loaded: page the stream back until it is, then scroll.
+        const scroll = () => viewportRef.current?.scrollToMessage(entry.id);
+        void driveJumpBackfill({
+          targetSeq: entry.seq,
+          readStartSeq: () => {
+            const cursor = useSessionStore
+              .getState()
+              .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
+            return cursor?.startSeq ?? Number.POSITIVE_INFINITY;
+          },
+          readEpoch: () =>
+            useSessionStore.getState().sessions[resolvedServerId]?.agentTimelineCursor.get(agentId)
+              ?.epoch ?? "",
+          fetchPage: (request) =>
+            getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, request),
+          onCovered: scroll,
+        }).catch(() => scroll());
+      },
+      [agentId, resolvedServerId],
+    );
 
     const setInlineDetailsExpanded = useCallback(
       (itemId: string, expanded: boolean) => {
@@ -980,8 +1198,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           renderModel,
           emptyStateStyle,
           emptyText: t("agentStream.empty"),
+          isAuthoritativeHistoryReady,
         }),
-      [renderModel, emptyStateStyle, t],
+      [renderModel, emptyStateStyle, t, isAuthoritativeHistoryReady],
     );
 
     const { boundary, auxiliary } = renderModel;
@@ -1081,6 +1300,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               routeBottomAnchorRequest,
               isAuthoritativeHistoryReady,
               onNearBottomChange: setIsNearBottom,
+              onScrollVelocityChange: handleScrollVelocity,
               onNearHistoryStart: loadOlder,
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,
@@ -1091,25 +1311,13 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
             })}
           </MessageOuterSpacingProvider>
-          {!isNearBottom && (
-            <View style={stylesheet.scrollToBottomContainer} pointerEvents="box-none">
-              <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
-                <Pressable
-                  style={stylesheet.scrollToBottomButton}
-                  onPress={scrollToBottom}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("agentStream.scrollToBottom")}
-                  testID="scroll-to-bottom-button"
-                >
-                  <ChevronDown size={24} color={stylesheet.scrollToBottomIcon.color} />
-                </Pressable>
-              </Animated.View>
-            </View>
-          )}
-          {messageJumpEntries.length > 0 && (
-            <View style={stylesheet.messageJumpContainer} pointerEvents="box-none">
+          <Animated.View
+            style={[stylesheet.floatingActionsContainer, floatingActionsAnimatedStyle]}
+            pointerEvents={floatingActionsHidden ? "none" : "box-none"}
+          >
+            {messageJumpEntries.length > 0 && (
               <Pressable
-                style={stylesheet.messageJumpButton}
+                style={stylesheet.floatingActionButton}
                 onPress={openMessageJumpSheet}
                 accessibilityRole="button"
                 accessibilityLabel={t("agentStream.messageJump.button")}
@@ -1117,11 +1325,39 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               >
                 <List size={20} color={stylesheet.messageJumpIcon.color} />
               </Pressable>
-            </View>
-          )}
+            )}
+            {!isNearBottom && (
+              <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
+                <Pressable
+                  style={stylesheet.floatingActionButton}
+                  onPress={scrollToBottom}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("agentStream.scrollToBottom")}
+                  testID="scroll-to-bottom-button"
+                >
+                  <ChevronDown size={20} color={stylesheet.scrollToBottomIcon.color} />
+                </Pressable>
+              </Animated.View>
+            )}
+            <Pressable
+              style={stylesheet.floatingActionButton}
+              onPress={handleRefreshTimeline}
+              disabled={isRefreshingTimeline}
+              accessibilityRole="button"
+              accessibilityLabel={t("agentStream.refresh")}
+              testID="refresh-timeline-button"
+            >
+              {isRefreshingTimeline ? (
+                <ThemedLoadingSpinner size="small" uniProps={mutedColorMapping} />
+              ) : (
+                <RefreshCw size={20} color={stylesheet.refreshIcon.color} />
+              )}
+            </Pressable>
+          </Animated.View>
           <MessageJumpSheet
             visible={isMessageJumpSheetOpen}
             entries={messageJumpEntries}
+            loading={!indexReady}
             onSelect={handleJumpToMessage}
             onClose={closeMessageJumpSheet}
           />
@@ -1608,17 +1844,17 @@ const stylesheet = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     textAlign: "center",
   },
-  scrollToBottomContainer: {
+  floatingActionsContainer: {
     position: "absolute",
     bottom: 16,
-    left: 0,
-    right: 0,
+    right: 16,
     alignItems: "center",
+    gap: theme.spacing[2],
   },
-  scrollToBottomButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  floatingActionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: theme.colors.surface2,
     alignItems: "center",
     justifyContent: "center",
@@ -1627,23 +1863,10 @@ const stylesheet = StyleSheet.create((theme) => ({
   scrollToBottomIcon: {
     color: theme.colors.foreground,
   },
-  messageJumpContainer: {
-    position: "absolute",
-    bottom: 80,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-  },
-  messageJumpButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: theme.colors.surface2,
-    alignItems: "center",
-    justifyContent: "center",
-    ...theme.shadow.sm,
-  },
   messageJumpIcon: {
+    color: theme.colors.foreground,
+  },
+  refreshIcon: {
     color: theme.colors.foreground,
   },
 }));
