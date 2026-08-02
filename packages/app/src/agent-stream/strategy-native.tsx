@@ -105,6 +105,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     routeBottomAnchorRequest,
     isAuthoritativeHistoryReady,
     onNearBottomChange,
+    onScrollVelocityChange,
     onNearHistoryStart,
     isLoadingOlderHistory,
     hasOlderHistory,
@@ -126,6 +127,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     contentMeasuredForKey: null as string | null,
   });
   const scrollOffsetYRef = useRef(0);
+  const scrollVelocitySampleMsRef = useRef(0);
   const isUserScrollActiveRef = useRef(false);
   const scrollKeyboardDismiss = useScrollKeyboardDismiss();
   const userScrollEndFrameIdRef = useRef<number | null>(null);
@@ -502,6 +504,15 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     const previousOffsetY = scrollOffsetYRef.current;
     scrollOffsetYRef.current = contentOffset.y;
     scrollKeyboardDismiss.onScroll(event);
+
+    if (onScrollVelocityChange) {
+      const now = Date.now();
+      const elapsedMs = now - scrollVelocitySampleMsRef.current;
+      scrollVelocitySampleMsRef.current = now;
+      if (elapsedMs > 0) {
+        onScrollVelocityChange(((contentOffset.y - previousOffsetY) / elapsedMs) * 1000);
+      }
+    }
 
     streamViewportMetricsRef.current = {
       contentHeight: Math.max(0, contentSize.height),

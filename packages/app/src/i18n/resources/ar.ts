@@ -191,6 +191,7 @@ export const ar: TranslationResources = {
     empty: "ابدأ الدردشة مع هذا الوكيل...",
     scrollToBottom: "قم بالتمرير إلى الأسفل",
     historyLoadFailed: "تعذر تحميل سجل الوكيل",
+    refresh: "تحديث المحادثة",
     messageJump: {
       button: "الانتقال إلى رسالة",
       title: "رسائلك",

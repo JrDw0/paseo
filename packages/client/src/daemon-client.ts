@@ -570,6 +570,7 @@ export interface FetchAgentTimelineOptions {
   limit?: number;
   projection?: FetchAgentTimelineProjection;
   mergeWindow?: boolean;
+  messageKind?: "user";
   requestId?: string;
   timeout?: number;
 }
@@ -2819,6 +2820,7 @@ export class DaemonClient {
       ...(typeof options.limit === "number" ? { limit: options.limit } : {}),
       ...(options.projection ? { projection: options.projection } : {}),
       ...(options.mergeWindow === true ? { mergeWindow: true } : {}),
+      ...(options.messageKind ? { messageKind: options.messageKind } : {}),
     });
 
     const payload = await this.sendRequest({

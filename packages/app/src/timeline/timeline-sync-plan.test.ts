@@ -3,6 +3,7 @@ import { TIMELINE_FETCH_PAGE_SIZE } from "@/timeline/timeline-fetch-policy";
 import {
   isTimelineCatchUpComplete,
   isTimelineResumeSnapshotAuthoritative,
+  planTimelineFullIndexFetch,
   planTimelineOlderFetch,
   planTimelinePromptJump,
   planTimelineTailFetch,
@@ -71,5 +72,14 @@ describe("timeline sync planning", () => {
         error: null,
       }),
     ).toBe(false);
+  });
+
+  test("full-index fetch requests the whole timeline but only user messages", () => {
+    expect(planTimelineFullIndexFetch()).toEqual({
+      direction: "tail",
+      limit: 0,
+      projection: "projected",
+      messageKind: "user",
+    });
   });
 });

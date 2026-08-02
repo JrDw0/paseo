@@ -191,6 +191,7 @@ export const es: TranslationResources = {
     empty: "Comience a chatear con este agente...",
     scrollToBottom: "Desplazarse hacia abajo",
     historyLoadFailed: "No se pudo cargar el historial del agente",
+    refresh: "Actualizar conversación",
     messageJump: {
       button: "Ir a un mensaje",
       title: "Tus mensajes",

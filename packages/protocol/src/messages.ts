@@ -1436,6 +1436,10 @@ export const FetchAgentTimelineRequestMessageSchema = z.object({
   projection: z.enum(["projected", "canonical"]).optional(),
   // Allow the client to merge this bounded page outside its contiguous loaded range.
   mergeWindow: z.boolean().optional(),
+  // When "user", the daemon returns only user_message entries so a compact
+  // message index ships O(user messages) instead of the full projected
+  // conversation. Additive and optional; older clients/daemons are unchanged.
+  messageKind: z.literal("user").optional(),
 });
 
 export const AgentTimelineListPromptsRequestMessageSchema = z.object({

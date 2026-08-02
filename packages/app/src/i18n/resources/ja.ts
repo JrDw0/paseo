@@ -191,6 +191,7 @@ export const ja: TranslationResources = {
     empty: "このエージェントとチャットを始めましょう...",
     scrollToBottom: "下にスクロール",
     historyLoadFailed: "エージェントの履歴を読み込めませんでした",
+    refresh: "会話を更新",
     messageJump: {
       button: "メッセージへ移動",
       title: "自分のメッセージ",

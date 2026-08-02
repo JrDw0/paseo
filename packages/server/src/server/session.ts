@@ -6208,6 +6208,7 @@ export class Session {
     cursor?: AgentTimelineCursor;
     pageLimit: number;
     fullTimeline?: AgentTimelineFetchResult;
+    messageKind?: "user";
   }): AgentTimelineProjectionSelection {
     const selectedTimeline = this.shouldUseFullTimelineForProjectedPage({
       timeline: input.controlTimeline,
@@ -6224,13 +6225,21 @@ export class Session {
       limit: input.pageLimit,
     });
 
+    let entries = page.entries;
+    let startSeq = page.startSeq;
+    let endSeq = page.endSeq;
+    if (input.messageKind === "user") {
+      entries = page.entries.filter((entry) => entry.item.type === "user_message");
+      startSeq = entries[0]?.seqStart ?? null;
+      endSeq = entries[entries.length - 1]?.seqEnd ?? null;
+    }
+
     return {
       timeline: selectedTimeline,
-      entries: page.entries,
-      startSeq: page.startSeq,
-      endSeq: page.endSeq,
-      hasOlder:
-        page.hasOlder || (page.startSeq !== null && page.startSeq > selectedTimeline.window.minSeq),
+      entries,
+      startSeq,
+      endSeq,
+      hasOlder: page.hasOlder || (startSeq !== null && startSeq > selectedTimeline.window.minSeq),
       hasNewer: page.hasNewer,
     };
   }
@@ -6243,6 +6252,7 @@ export class Session {
     cursor?: AgentTimelineCursor;
     pageLimit: number;
     fullTimeline?: AgentTimelineFetchResult;
+    messageKind?: "user";
   }): AgentTimelineProjectionSelection {
     if (input.projection === "canonical") {
       return this.selectCanonicalTimelineProjection({ timeline: input.controlTimeline });
@@ -6286,6 +6296,7 @@ export class Session {
         direction,
         ...(cursor ? { cursor } : {}),
         pageLimit,
+        ...(msg.messageKind ? { messageKind: msg.messageKind } : {}),
       });
       const startCursor =
         selectedTimeline.startSeq !== null

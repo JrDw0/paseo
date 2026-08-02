@@ -226,6 +226,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     isAuthoritativeHistoryReady,
     onNearBottomChange,
     onReadingPositionChange,
+    onScrollVelocityChange,
     onNearHistoryStart,
     isLoadingOlderHistory,
     hasOlderHistory,
@@ -263,6 +264,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     | null
   >(null);
   const upwardInputEvidenceUntilRef = useRef(0);
+  const scrollVelocitySampleMsRef = useRef(0);
   const lastTouchClientYRef = useRef<number | null>(null);
   const pendingAutoScrollFrameRef = useRef<number | null>(null);
   const pendingAutoScrollTimeoutRef = useRef<number | null>(null);
@@ -689,12 +691,22 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       stopFollowingOutputFromUserIntent();
     }
 
+    const scrollDeltaY = currentScrollTop - lastKnownScrollTopRef.current;
     lastKnownScrollTopRef.current = currentScrollTop;
+    if (onScrollVelocityChange) {
+      const now = Date.now();
+      const elapsedMs = now - scrollVelocitySampleMsRef.current;
+      scrollVelocitySampleMsRef.current = now;
+      if (elapsedMs > 0) {
+        onScrollVelocityChange((scrollDeltaY / elapsedMs) * 1000);
+      }
+    }
     updateScrollMetrics();
     evaluateHistoryStart();
   }, [
     evaluateHistoryStart,
     isJumpSettling,
+    onScrollVelocityChange,
     stopFollowingOutputFromUserIntent,
     updateScrollMetrics,
   ]);

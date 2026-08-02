@@ -189,6 +189,7 @@ export const en = {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
     historyLoadFailed: "Couldn't load agent history",
+    refresh: "Refresh conversation",
     messageJump: {
       button: "Jump to a message",
       title: "Your messages",

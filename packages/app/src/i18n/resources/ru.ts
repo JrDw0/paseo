@@ -191,6 +191,7 @@ export const ru: TranslationResources = {
     empty: "Начните общаться с этим агентом...",
     scrollToBottom: "Прокрутить вниз",
     historyLoadFailed: "Не удалось загрузить историю агента",
+    refresh: "Обновить беседу",
     messageJump: {
       button: "Перейти к сообщению",
       title: "Ваши сообщения",
