@@ -320,8 +320,13 @@ export const zhCN: TranslationResources = {
   },
   importSession: {
     title: "导入会话",
+    search: {
+      placeholder: "搜索标题、prompt 或路径...",
+    },
     filters: {
       all: "全部",
+      byProvider: "按 Provider 筛选",
+      byProject: "按项目筛选",
     },
     status: {
       connectHost: "连接到 Host 以导入会话",
@@ -343,6 +348,7 @@ export const zhCN: TranslationResources = {
       noRecent: "没有可导入的最近会话。",
       alreadyImported: "所有最近会话都已导入。",
       noProviderSessions: "没有找到 {{provider}} 会话。",
+      noMatchingResults: "没有匹配搜索或筛选条件的会话。",
     },
     row: {
       importing: "正在导入...",

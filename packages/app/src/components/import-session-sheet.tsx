@@ -7,7 +7,7 @@ import type {
   FetchRecentProviderSessionEntry,
 } from "@getpaseo/client/internal/daemon-client";
 import type { AgentProvider } from "@getpaseo/protocol/agent-types";
-import { ChevronDown, Inbox, Layers, RotateCw } from "lucide-react-native";
+import { ChevronDown, Folder, Inbox, Layers, RotateCw } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -22,7 +22,9 @@ import {
   ALL_FILTER_VALUE,
   buildProviderLabelMap,
   collectErroredProviderLabels,
+  collectProjectCwds,
   computeEmptyState,
+  filterSessions,
   getPromptPreview,
   getSessionTitle,
   PER_PROVIDER_LIMIT,
@@ -245,14 +247,14 @@ function ImportSessionSheetRow({
             {importing ? t("importSession.row.importing") : lastActivity}
           </Text>
         </View>
-        <Text style={styles.rowPreview} numberOfLines={2}>
-          {promptPreview}
-        </Text>
         {showCwd && entry.cwd ? (
           <Text style={styles.rowCwd} numberOfLines={1}>
             {entry.cwd}
           </Text>
         ) : null}
+        <Text style={styles.rowPreview} numberOfLines={2}>
+          {promptPreview}
+        </Text>
       </View>
     </Pressable>
   );
@@ -320,10 +322,15 @@ export function ImportSessionSheet({
   );
 
   const filterProviders = useMemo(() => [...(providersToFetch ?? [])].sort(), [providersToFetch]);
+  const projectCwds = useMemo(() => collectProjectCwds(aggregatedEntries), [aggregatedEntries]);
 
   const [selectedProvider, setSelectedProvider] = useState<string>(ALL_FILTER_VALUE);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterAnchorRef = useRef<View>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProjectCwd, setSelectedProjectCwd] = useState<string>(ALL_FILTER_VALUE);
+  const [isProjectFilterOpen, setIsProjectFilterOpen] = useState(false);
+  const projectFilterAnchorRef = useRef<View>(null);
 
   useEffect(() => {
     if (
@@ -334,10 +341,30 @@ export function ImportSessionSheet({
     }
   }, [visible, filterProviders, selectedProvider]);
 
-  const visibleEntries = useMemo(() => {
-    if (selectedProvider === ALL_FILTER_VALUE) return aggregatedEntries;
-    return aggregatedEntries.filter((entry) => entry.providerId === selectedProvider);
-  }, [aggregatedEntries, selectedProvider]);
+  useEffect(() => {
+    if (!visible) {
+      setSearchQuery("");
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (
+      !visible ||
+      (selectedProjectCwd !== ALL_FILTER_VALUE && !projectCwds.includes(selectedProjectCwd))
+    ) {
+      setSelectedProjectCwd(ALL_FILTER_VALUE);
+    }
+  }, [visible, projectCwds, selectedProjectCwd]);
+
+  const visibleEntries = useMemo(
+    () =>
+      filterSessions(aggregatedEntries, {
+        query: searchQuery,
+        providerId: selectedProvider,
+        projectCwd: selectedProjectCwd,
+      }),
+    [aggregatedEntries, searchQuery, selectedProvider, selectedProjectCwd],
+  );
 
   const filterComboboxOptions = useMemo<ComboboxOption[]>(
     () => [
@@ -357,6 +384,21 @@ export function ImportSessionSheet({
     [filterComboboxOptions, selectedProvider, t],
   );
 
+  const projectComboboxOptions = useMemo<ComboboxOption[]>(
+    () => [
+      { id: ALL_FILTER_VALUE, label: t("importSession.filters.all") },
+      ...projectCwds.map((projectCwd) => ({ id: projectCwd, label: projectCwd })),
+    ],
+    [projectCwds, t],
+  );
+
+  const selectedProjectLabel = useMemo(
+    () =>
+      projectComboboxOptions.find((opt) => opt.id === selectedProjectCwd)?.label ??
+      t("importSession.filters.all"),
+    [projectComboboxOptions, selectedProjectCwd, t],
+  );
+
   const handleFilterOpen = useCallback(() => setIsFilterOpen(true), []);
 
   const filterTriggerStyle = useCallback(
@@ -373,6 +415,13 @@ export function ImportSessionSheet({
     setIsFilterOpen(false);
   }, []);
 
+  const handleProjectFilterOpen = useCallback(() => setIsProjectFilterOpen(true), []);
+
+  const handleProjectFilterSelect = useCallback((id: string) => {
+    setSelectedProjectCwd(id);
+    setIsProjectFilterOpen(false);
+  }, []);
+
   const filterOptionIcons = useMemo(() => {
     const map = new Map<string, React.ReactNode>();
     map.set(ALL_FILTER_VALUE, <Layers size={14} color={theme.colors.foregroundMuted} />);
@@ -382,6 +431,15 @@ export function ImportSessionSheet({
     }
     return map;
   }, [filterProviders, theme.colors.foregroundMuted]);
+
+  const projectOptionIcons = useMemo(() => {
+    const map = new Map<string, React.ReactNode>();
+    map.set(ALL_FILTER_VALUE, <Layers size={14} color={theme.colors.foregroundMuted} />);
+    for (const projectCwd of projectCwds) {
+      map.set(projectCwd, <Folder size={14} color={theme.colors.foregroundMuted} />);
+    }
+    return map;
+  }, [projectCwds, theme.colors.foregroundMuted]);
 
   const renderFilterOption = useCallback(
     ({
@@ -404,6 +462,29 @@ export function ImportSessionSheet({
       />
     ),
     [filterOptionIcons],
+  );
+
+  const renderProjectFilterOption = useCallback(
+    ({
+      option,
+      selected,
+      active,
+      onPress,
+    }: {
+      option: ComboboxOption;
+      selected: boolean;
+      active: boolean;
+      onPress: () => void;
+    }) => (
+      <ComboboxItem
+        label={option.label}
+        selected={selected}
+        active={active}
+        onPress={onPress}
+        leadingSlot={projectOptionIcons.get(option.id)}
+      />
+    ),
+    [projectOptionIcons],
   );
 
   const importMutation = useMutation({
@@ -457,8 +538,15 @@ export function ImportSessionSheet({
     () => ({
       title: t("importSession.title"),
       actions: <RefreshAction isRefreshing={isRefreshing} onPress={handleRefresh} />,
+      search: {
+        onChange: setSearchQuery,
+        resetKey: Number(visible),
+        placeholder: t("importSession.search.placeholder"),
+        autoFocus: false,
+        testID: "import-session-search",
+      },
     }),
-    [isRefreshing, handleRefresh, t],
+    [isRefreshing, handleRefresh, t, visible],
   );
 
   const isSnapshotUnsupported = requiresHostUpgrade;
@@ -481,8 +569,11 @@ export function ImportSessionSheet({
     visibleCount: visibleEntries.length,
     totalAlreadyImportedCount,
     providerLabelById,
+    hasActiveQuery: searchQuery.trim().length > 0,
+    isProjectFilterActive: selectedProjectCwd !== ALL_FILTER_VALUE,
   });
-  const showFilter = filterProviders.length > 1;
+  const showProviderFilter = filterProviders.length > 1;
+  const showProjectFilter = !cwd && projectCwds.length > 1;
 
   return (
     <AdaptiveModalSheet
@@ -493,41 +584,79 @@ export function ImportSessionSheet({
       desktopMaxWidth={560}
       snapPoints={IMPORT_SHEET_SNAP_POINTS}
     >
-      {showFilter ? (
-        <View ref={filterAnchorRef} collapsable={false} style={styles.filterTriggerWrap}>
-          <Pressable
-            onPress={handleFilterOpen}
-            style={filterTriggerStyle}
-            testID="import-session-filter-trigger"
-            accessibilityRole="button"
-            accessibilityLabel={`Filter: ${selectedProviderLabel}`}
-          >
-            {selectedProvider === ALL_FILTER_VALUE ? (
-              <Layers size={14} color={theme.colors.foregroundMuted} />
-            ) : (
-              (() => {
-                const ProviderIcon = getProviderIcon(selectedProvider);
-                return <ProviderIcon size={14} color={theme.colors.foregroundMuted} />;
-              })()
-            )}
-            <Text style={styles.filterTriggerText} numberOfLines={1}>
-              {selectedProviderLabel}
-            </Text>
-            <ChevronDown size={14} color={theme.colors.foregroundMuted} />
-          </Pressable>
-          <Combobox
-            options={filterComboboxOptions}
-            value={selectedProvider}
-            onSelect={handleFilterSelect}
-            renderOption={renderFilterOption}
-            searchable={false}
-            title="Filter by provider"
-            open={isFilterOpen}
-            onOpenChange={setIsFilterOpen}
-            anchorRef={filterAnchorRef}
-            desktopPlacement="bottom-start"
-            desktopPreventInitialFlash
-          />
+      {showProviderFilter || showProjectFilter ? (
+        <View style={styles.filterRow}>
+          {showProviderFilter ? (
+            <View ref={filterAnchorRef} collapsable={false} style={styles.filterAnchor}>
+              <Pressable
+                onPress={handleFilterOpen}
+                style={filterTriggerStyle}
+                testID="import-session-filter-trigger"
+                accessibilityRole="button"
+                accessibilityLabel={`${t("importSession.filters.byProvider")}: ${selectedProviderLabel}`}
+              >
+                {selectedProvider === ALL_FILTER_VALUE ? (
+                  <Layers size={14} color={theme.colors.foregroundMuted} />
+                ) : (
+                  (() => {
+                    const ProviderIcon = getProviderIcon(selectedProvider);
+                    return <ProviderIcon size={14} color={theme.colors.foregroundMuted} />;
+                  })()
+                )}
+                <Text style={styles.filterTriggerText} numberOfLines={1}>
+                  {selectedProviderLabel}
+                </Text>
+                <ChevronDown size={14} color={theme.colors.foregroundMuted} />
+              </Pressable>
+              <Combobox
+                options={filterComboboxOptions}
+                value={selectedProvider}
+                onSelect={handleFilterSelect}
+                renderOption={renderFilterOption}
+                searchable={false}
+                title={t("importSession.filters.byProvider")}
+                open={isFilterOpen}
+                onOpenChange={setIsFilterOpen}
+                anchorRef={filterAnchorRef}
+                desktopPlacement="bottom-start"
+                desktopPreventInitialFlash
+              />
+            </View>
+          ) : null}
+          {showProjectFilter ? (
+            <View ref={projectFilterAnchorRef} collapsable={false} style={styles.filterAnchor}>
+              <Pressable
+                onPress={handleProjectFilterOpen}
+                style={filterTriggerStyle}
+                testID="import-session-project-filter-trigger"
+                accessibilityRole="button"
+                accessibilityLabel={`${t("importSession.filters.byProject")}: ${selectedProjectLabel}`}
+              >
+                {selectedProjectCwd === ALL_FILTER_VALUE ? (
+                  <Layers size={14} color={theme.colors.foregroundMuted} />
+                ) : (
+                  <Folder size={14} color={theme.colors.foregroundMuted} />
+                )}
+                <Text style={styles.filterTriggerText} numberOfLines={1}>
+                  {selectedProjectLabel}
+                </Text>
+                <ChevronDown size={14} color={theme.colors.foregroundMuted} />
+              </Pressable>
+              <Combobox
+                options={projectComboboxOptions}
+                value={selectedProjectCwd}
+                onSelect={handleProjectFilterSelect}
+                renderOption={renderProjectFilterOption}
+                searchable={false}
+                title={t("importSession.filters.byProject")}
+                open={isProjectFilterOpen}
+                onOpenChange={setIsProjectFilterOpen}
+                anchorRef={projectFilterAnchorRef}
+                desktopPlacement="bottom-start"
+                desktopPreventInitialFlash
+              />
+            </View>
+          ) : null}
         </View>
       ) : null}
       <SheetStatusMessages
@@ -560,14 +689,20 @@ export function ImportSessionSheet({
 }
 
 const styles = StyleSheet.create((theme) => ({
-  filterTriggerWrap: {
+  filterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
     paddingBottom: theme.spacing[2],
+  },
+  filterAnchor: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   filterTrigger: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1.5],
-    alignSelf: "flex-start",
     paddingVertical: theme.spacing[1.5],
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.md,
@@ -593,7 +728,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1.5],
     paddingHorizontal: theme.spacing[2],
     marginHorizontal: -theme.spacing[2],
     borderRadius: theme.borderRadius.lg,

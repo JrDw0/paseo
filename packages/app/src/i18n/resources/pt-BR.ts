@@ -323,8 +323,13 @@ export const ptBR: TranslationResources = {
   },
   importSession: {
     title: "Importar sessão",
+    search: {
+      placeholder: "Pesquisar por título, prompt ou caminho...",
+    },
     filters: {
       all: "Tudo",
+      byProvider: "Filtrar por provedor",
+      byProject: "Filtrar por projeto",
     },
     status: {
       connectHost: "Conecte-se a um host para importar sessões",
@@ -346,6 +351,7 @@ export const ptBR: TranslationResources = {
       noRecent: "Nenhuma sessão recente para importar.",
       alreadyImported: "Todas as sessões recentes já foram importadas.",
       noProviderSessions: "Nenhuma sessão de {{provider}} encontrada.",
+      noMatchingResults: "Nenhuma sessão corresponde à sua pesquisa ou filtros.",
     },
     row: {
       importing: "Importando...",

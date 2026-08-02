@@ -323,8 +323,13 @@ export const ja: TranslationResources = {
   },
   importSession: {
     title: "セッションをインポート",
+    search: {
+      placeholder: "タイトル・プロンプト・パスで検索...",
+    },
     filters: {
       all: "すべて",
+      byProvider: "プロバイダーで絞り込む",
+      byProject: "プロジェクトで絞り込む",
     },
     status: {
       connectHost: "セッションをインポートするにはホストに接続してください",
@@ -346,6 +351,7 @@ export const ja: TranslationResources = {
       noRecent: "インポートする最近のセッションがありません。",
       alreadyImported: "最近のセッションはすでにすべてインポートされています。",
       noProviderSessions: "{{provider}}のセッションが見つかりません。",
+      noMatchingResults: "検索またはフィルターに一致するセッションがありません。",
     },
     row: {
       importing: "インポート中...",
