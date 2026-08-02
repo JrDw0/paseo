@@ -1,5 +1,4 @@
 import type { SidebarWorkspaceEntry } from "@/hooks/sidebar-workspaces-view-model";
-import type { WorkspaceTitleSource } from "@/hooks/use-settings";
 import type { WorkspaceRowAgentMeta } from "@/hooks/use-workspace-row-agent-meta";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 
@@ -55,13 +54,10 @@ export function resolveSidebarWorkspaceFilterFields(input: {
   entry: SidebarWorkspaceEntry | null;
   agentMeta: WorkspaceRowAgentMeta | null;
   hostLabel: string;
-  workspaceTitleSource: WorkspaceTitleSource;
 }): SidebarWorkspaceFilterFields {
-  // Structural placements without a session entry can only match their name.
   const label = input.entry
     ? resolveSidebarWorkspacePrimaryLabel({
         workspace: input.entry,
-        workspaceTitleSource: input.workspaceTitleSource,
         agentTitle: input.agentMeta?.agentTitle ?? null,
       })
     : input.row.name;

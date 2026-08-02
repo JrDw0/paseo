@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { isWeb as platformIsWeb } from "@/constants/platform";
-import { useAppSettings, type WorkspaceTitleSource } from "@/hooks/use-settings";
 import { useHosts } from "@/runtime/host-runtime";
 import { useSidebarViewStore, type SidebarGroupMode } from "@/stores/sidebar-view-store";
 
@@ -22,12 +21,6 @@ const filterColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMu
 const GROUP_MODE_ITEMS: Array<{ value: SidebarGroupMode; label: string }> = [
   { value: "project", label: "Project" },
   { value: "status", label: "Status" },
-];
-
-const WORKSPACE_TITLE_SOURCE_ITEMS: Array<{ value: WorkspaceTitleSource; label: string }> = [
-  { value: "title", label: "Title" },
-  { value: "branch", label: "Branch name" },
-  { value: "agent", label: "Agent session" },
 ];
 
 interface DisplayPreferenceOption<Value extends string> {
@@ -42,23 +35,12 @@ export function SidebarDisplayPreferencesMenu() {
   const toggleHostFilter = useSidebarViewStore((state) => state.toggleHostFilter);
   const clearHostFilters = useSidebarViewStore((state) => state.clearHostFilters);
   const hosts = useHosts();
-  const {
-    settings: { workspaceTitleSource },
-    updateSettings,
-  } = useAppSettings();
 
   const handleSelectMode = useCallback(
     (mode: SidebarGroupMode) => {
       setGroupMode(mode);
     },
     [setGroupMode],
-  );
-
-  const handleWorkspaceTitleSourceSelect = useCallback(
-    (source: WorkspaceTitleSource) => {
-      void updateSettings({ workspaceTitleSource: source });
-    },
-    [updateSettings],
   );
 
   const triggerStyle = useCallback(
@@ -120,19 +102,6 @@ export function SidebarDisplayPreferencesMenu() {
             ))}
           </>
         ) : null}
-        <DropdownMenuSeparator />
-        <View style={styles.menuHeader}>
-          <Text style={styles.menuHeaderLabel}>Workspace title</Text>
-        </View>
-        {WORKSPACE_TITLE_SOURCE_ITEMS.map((item) => (
-          <DisplayPreferenceMenuItem
-            key={item.value}
-            item={item}
-            isSelected={workspaceTitleSource === item.value}
-            testIDPrefix="sidebar-workspace-title-source"
-            onSelect={handleWorkspaceTitleSourceSelect}
-          />
-        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );

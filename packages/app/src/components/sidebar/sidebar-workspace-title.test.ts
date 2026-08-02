@@ -2,70 +2,47 @@ import { describe, expect, it } from "vitest";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 
 describe("resolveSidebarWorkspacePrimaryLabel", () => {
-  it("uses the workspace name in title mode", () => {
+  it("uses the workspace name when there is no title or session title", () => {
     const label = resolveSidebarWorkspacePrimaryLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", title: null },
-      workspaceTitleSource: "title",
+      workspace: { name: "Investigate search", title: null },
     });
 
     expect(label).toBe("Investigate search");
   });
 
-  it("uses the branch name in branch mode", () => {
+  it("prefers the session title over the workspace name", () => {
     const label = resolveSidebarWorkspacePrimaryLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", title: null },
-      workspaceTitleSource: "branch",
-    });
-
-    expect(label).toBe("fix/search");
-  });
-
-  it("falls back to the workspace name in branch mode without a branch", () => {
-    const label = resolveSidebarWorkspacePrimaryLabel({
-      workspace: { name: "Local folder", currentBranch: null, title: null },
-      workspaceTitleSource: "branch",
-    });
-
-    expect(label).toBe("Local folder");
-  });
-
-  it("uses the agent title in agent mode", () => {
-    const label = resolveSidebarWorkspacePrimaryLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", title: null },
-      workspaceTitleSource: "agent",
+      workspace: { name: "Investigate search", title: null },
       agentTitle: "Review the sidebar rework",
     });
 
     expect(label).toBe("Review the sidebar rework");
   });
 
-  it("falls back to the workspace name in agent mode without an agent title", () => {
+  it("prefers the session title even when the workspace name is the branch", () => {
     const label = resolveSidebarWorkspacePrimaryLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", title: null },
-      workspaceTitleSource: "agent",
-      agentTitle: null,
+      workspace: { name: "personal", title: null },
+      agentTitle: "调查一下为啥导入的会话标题都一样",
     });
 
-    expect(label).toBe("Investigate search");
+    expect(label).toBe("调查一下为啥导入的会话标题都一样");
   });
 
-  it("ignores the agent title in branch mode", () => {
+  it("lets a user-set title win over the session title", () => {
     const label = resolveSidebarWorkspacePrimaryLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", title: null },
-      workspaceTitleSource: "branch",
-      agentTitle: "Review the sidebar rework",
-    });
-
-    expect(label).toBe("fix/search");
-  });
-
-  it("lets a user-set title win over every source", () => {
-    const label = resolveSidebarWorkspacePrimaryLabel({
-      workspace: { name: "Investigate search", currentBranch: "fix/search", title: "My custom" },
-      workspaceTitleSource: "agent",
+      workspace: { name: "personal", title: "My custom" },
       agentTitle: "Review the sidebar rework",
     });
 
     expect(label).toBe("My custom");
+  });
+
+  it("falls back to the workspace name when there is no session title", () => {
+    const label = resolveSidebarWorkspacePrimaryLabel({
+      workspace: { name: "Investigate search", title: null },
+      agentTitle: null,
+    });
+
+    expect(label).toBe("Investigate search");
   });
 });
