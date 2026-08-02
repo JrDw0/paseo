@@ -113,7 +113,7 @@ import { useStableEvent } from "@/hooks/use-stable-event";
 import { removeResidentBrowserWebview } from "@/components/browser-webview-resident";
 import { createWorkspaceBrowser, useBrowserStore } from "@/stores/browser-store";
 import { getDesktopHost } from "@/desktop/host";
-import { buildProviderCommand } from "@/utils/provider-command-templates";
+import { buildProviderResumeCommand } from "@/utils/provider-command-templates";
 import { generateDraftId } from "@/stores/draft-keys";
 import { resolveWorkspaceRouteId } from "@/utils/workspace-identity";
 import {
@@ -2820,10 +2820,11 @@ function WorkspaceScreenContent({
       }
 
       const command =
-        buildProviderCommand({
+        buildProviderResumeCommand({
           provider: agent.provider,
-          id: "resume",
           sessionId: providerSessionId,
+          cwd: agent.cwd,
+          isWindows: isWeb && typeof navigator !== "undefined" && /Win/i.test(navigator.userAgent),
         }) ?? null;
       if (!command) {
         toast.error(t("workspace.tabs.toasts.resumeCommandUnavailable"));
