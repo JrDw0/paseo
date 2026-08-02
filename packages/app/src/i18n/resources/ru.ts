@@ -326,8 +326,13 @@ export const ru: TranslationResources = {
   },
   importSession: {
     title: "Импортировать сеанс",
+    search: {
+      placeholder: "Поиск по названию, prompt или пути...",
+    },
     filters: {
       all: "Все",
+      byProvider: "Фильтр по поставщику",
+      byProject: "Фильтр по проекту",
     },
     status: {
       connectHost: "Подключитесь к хосту, чтобы импортировать сеансы",
@@ -349,6 +354,7 @@ export const ru: TranslationResources = {
       noRecent: "Нет последних сеансов для импорта.",
       alreadyImported: "Все последние сеансы уже импортированы.",
       noProviderSessions: "Сеансы{{provider}}не найдены.",
+      noMatchingResults: "Нет сеансов, соответствующих поиску или фильтрам.",
     },
     row: {
       importing: "Импорт...",

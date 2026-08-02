@@ -71,6 +71,47 @@ export function aggregateSessionEntries(
   return collected;
 }
 
+export interface SessionFilters {
+  query: string;
+  providerId: string;
+  projectCwd: string;
+}
+
+export function filterSessions(
+  entries: ReadonlyArray<FetchRecentProviderSessionEntry>,
+  filters: SessionFilters,
+): FetchRecentProviderSessionEntry[] {
+  const normalizedQuery = filters.query.trim().toLocaleLowerCase();
+  return entries.filter((entry) => {
+    if (filters.providerId !== ALL_FILTER_VALUE && entry.providerId !== filters.providerId) {
+      return false;
+    }
+    if (filters.projectCwd !== ALL_FILTER_VALUE && entry.cwd !== filters.projectCwd) {
+      return false;
+    }
+    if (!normalizedQuery) {
+      return true;
+    }
+    // Match raw fields only. getSessionTitle/getPromptPreview fall back to placeholder
+    // copy ("Untitled session" / "No prompt preview"); matching the fallback would let a
+    // query like "no" hit every contentless session.
+    const haystacks = [entry.title, entry.firstPromptPreview, entry.lastPromptPreview, entry.cwd];
+    return haystacks.some((field) => field?.toLocaleLowerCase().includes(normalizedQuery));
+  });
+}
+
+export function collectProjectCwds(
+  entries: ReadonlyArray<FetchRecentProviderSessionEntry>,
+): string[] {
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (entry.cwd.trim()) {
+      seen.add(entry.cwd);
+    }
+  }
+  return Array.from(seen).sort((a, b) => a.localeCompare(b));
+}
+
 export function sumFilteredAlreadyImportedCount(
   queries: ReadonlyArray<SessionsQueryResult>,
 ): number {
@@ -127,6 +168,8 @@ export interface EmptyStateInputs {
   visibleCount: number;
   totalAlreadyImportedCount: number;
   providerLabelById: ReadonlyMap<string, string>;
+  hasActiveQuery: boolean;
+  isProjectFilterActive: boolean;
 }
 
 export function computeEmptyState(input: EmptyStateInputs): {
@@ -142,12 +185,24 @@ export function computeEmptyState(input: EmptyStateInputs): {
   if (!showEmptyState) {
     return { showEmptyState, emptyStateTitle: "" };
   }
-  const isFilteredEmpty = input.selectedProvider !== ALL_FILTER_VALUE && input.aggregatedCount > 0;
-  if (isFilteredEmpty) {
+  const isProviderOnlyFilter =
+    input.selectedProvider !== ALL_FILTER_VALUE &&
+    input.aggregatedCount > 0 &&
+    !input.hasActiveQuery &&
+    !input.isProjectFilterActive;
+  if (isProviderOnlyFilter) {
     const label = input.providerLabelById.get(input.selectedProvider) ?? input.selectedProvider;
     return {
       showEmptyState,
       emptyStateTitle: i18n.t("importSession.empty.noProviderSessions", { provider: label }),
+    };
+  }
+  // Query or project filter active: don't claim everything is already imported when the
+  // user narrowed the list themselves.
+  if (input.hasActiveQuery || input.isProjectFilterActive) {
+    return {
+      showEmptyState,
+      emptyStateTitle: i18n.t("importSession.empty.noMatchingResults"),
     };
   }
   if (input.totalAlreadyImportedCount > 0) {

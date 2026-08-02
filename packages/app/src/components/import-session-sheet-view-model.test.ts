@@ -5,7 +5,9 @@ import {
   ALL_FILTER_VALUE,
   buildProviderLabelMap,
   collectErroredProviderLabels,
+  collectProjectCwds,
   computeEmptyState,
+  filterSessions,
   getPromptPreview,
   getSessionTitle,
   resolveProvidersToFetch,
@@ -152,6 +154,112 @@ describe("aggregateSessionEntries", () => {
   });
 });
 
+describe("filterSessions", () => {
+  const noFilters = {
+    query: "",
+    providerId: ALL_FILTER_VALUE,
+    projectCwd: ALL_FILTER_VALUE,
+  };
+
+  it("returns every entry when no filter is active", () => {
+    const entries = [entry({ providerHandleId: "a" }), entry({ providerHandleId: "b" })];
+    expect(filterSessions(entries, noFilters)).toEqual(entries);
+  });
+
+  it("matches the query against the title, ignoring case and surrounding whitespace", () => {
+    const hit = entry({ providerHandleId: "a", title: "Pairing Method" });
+    const miss = entry({ providerHandleId: "b", title: "Unrelated" });
+    expect(filterSessions([hit, miss], { ...noFilters, query: "  pairing " })).toEqual([hit]);
+  });
+
+  it("matches the query against the first prompt preview when the title is empty", () => {
+    const hit = entry({ providerHandleId: "a", title: null, firstPromptPreview: "How to fork" });
+    expect(filterSessions([hit], { ...noFilters, query: "how to" })).toEqual([hit]);
+  });
+
+  it("matches the query against the last prompt preview", () => {
+    const hit = entry({ providerHandleId: "a", title: null, lastPromptPreview: "ship the beta" });
+    expect(filterSessions([hit], { ...noFilters, query: "SHIP" })).toEqual([hit]);
+  });
+
+  it("matches the query against the cwd substring", () => {
+    const hit = entry({ providerHandleId: "a", cwd: "/repo/paseo" });
+    const miss = entry({ providerHandleId: "b", cwd: "/repo/other" });
+    expect(filterSessions([hit, miss], { ...noFilters, query: "paseo" })).toEqual([hit]);
+  });
+
+  it("does not match placeholder copy from the title/preview fallback chain", () => {
+    const contentless = entry({
+      providerHandleId: "a",
+      title: null,
+      firstPromptPreview: null,
+      lastPromptPreview: null,
+    });
+    expect(filterSessions([contentless], { ...noFilters, query: "untitled" })).toEqual([]);
+    expect(filterSessions([contentless], { ...noFilters, query: "no prompt" })).toEqual([]);
+  });
+
+  it("narrows by provider id", () => {
+    const claude = entry({ providerHandleId: "a", providerId: "claude" });
+    const codex = entry({ providerHandleId: "b", providerId: "codex" });
+    expect(filterSessions([claude, codex], { ...noFilters, providerId: "codex" })).toEqual([codex]);
+  });
+
+  it("narrows by exact project cwd without substring leakage", () => {
+    const paseo = entry({ providerHandleId: "a", cwd: "/repo/paseo" });
+    const paseoFork = entry({ providerHandleId: "b", cwd: "/repo/paseo-fork" });
+    expect(filterSessions([paseo, paseoFork], { ...noFilters, projectCwd: "/repo/paseo" })).toEqual(
+      [paseo],
+    );
+  });
+
+  it("intersects query, provider, and project filters", () => {
+    const target = entry({
+      providerHandleId: "a",
+      providerId: "claude",
+      cwd: "/repo/paseo",
+      title: "Import flow",
+    });
+    const wrongProvider = entry({ ...target, providerHandleId: "b", providerId: "codex" });
+    const wrongProject = entry({ ...target, providerHandleId: "c", cwd: "/repo/other" });
+    const wrongQuery = entry({
+      providerHandleId: "d",
+      providerId: "claude",
+      cwd: "/repo/paseo",
+      title: "Unrelated",
+    });
+    expect(
+      filterSessions([target, wrongProvider, wrongProject, wrongQuery], {
+        query: "import",
+        providerId: "claude",
+        projectCwd: "/repo/paseo",
+      }),
+    ).toEqual([target]);
+  });
+
+  it("returns an empty array when nothing matches", () => {
+    expect(filterSessions([entry()], { ...noFilters, query: "nope" })).toEqual([]);
+  });
+});
+
+describe("collectProjectCwds", () => {
+  it("dedupes cwds and sorts them", () => {
+    expect(
+      collectProjectCwds([
+        entry({ cwd: "/repo/zeta" }),
+        entry({ cwd: "/repo/alpha" }),
+        entry({ cwd: "/repo/zeta" }),
+      ]),
+    ).toEqual(["/repo/alpha", "/repo/zeta"]);
+  });
+
+  it("skips blank cwds", () => {
+    expect(collectProjectCwds([entry({ cwd: "  " }), entry({ cwd: "/repo/paseo" })])).toEqual([
+      "/repo/paseo",
+    ]);
+  });
+});
+
 describe("sumFilteredAlreadyImportedCount", () => {
   it("returns 0 when no queries report a filtered count", () => {
     expect(sumFilteredAlreadyImportedCount([settled({ entries: [] })])).toBe(0);
@@ -240,6 +348,8 @@ describe("computeEmptyState", () => {
     visibleCount: 0,
     totalAlreadyImportedCount: 0,
     providerLabelById: new Map<string, string>(),
+    hasActiveQuery: false,
+    isProjectFilterActive: false,
   };
 
   it("hides the empty state while sessions are still loading", () => {
@@ -299,5 +409,44 @@ describe("computeEmptyState", () => {
       aggregatedCount: 1,
     });
     expect(result.emptyStateTitle).toBe("No z-ai sessions found.");
+  });
+
+  it("shows a generic no-match message when a query hides everything", () => {
+    const result = computeEmptyState({
+      ...baseInputs,
+      aggregatedCount: 3,
+      hasActiveQuery: true,
+    });
+    expect(result.emptyStateTitle).toBe("No sessions match your search or filters.");
+  });
+
+  it("prefers the generic no-match message over the already-imported message when searching", () => {
+    const result = computeEmptyState({
+      ...baseInputs,
+      aggregatedCount: 3,
+      hasActiveQuery: true,
+      totalAlreadyImportedCount: 4,
+    });
+    expect(result.emptyStateTitle).toBe("No sessions match your search or filters.");
+  });
+
+  it("shows the generic no-match message when a project filter hides everything", () => {
+    const result = computeEmptyState({
+      ...baseInputs,
+      aggregatedCount: 3,
+      isProjectFilterActive: true,
+    });
+    expect(result.emptyStateTitle).toBe("No sessions match your search or filters.");
+  });
+
+  it("uses the generic no-match message instead of the provider copy when a query is also active", () => {
+    const result = computeEmptyState({
+      ...baseInputs,
+      selectedProvider: "claude",
+      aggregatedCount: 3,
+      providerLabelById: new Map([["claude", "Claude Code"]]),
+      hasActiveQuery: true,
+    });
+    expect(result.emptyStateTitle).toBe("No sessions match your search or filters.");
   });
 });

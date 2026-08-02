@@ -324,8 +324,13 @@ export const ar: TranslationResources = {
   },
   importSession: {
     title: "جلسة الاستيراد",
+    search: {
+      placeholder: "ابحث حسب العنوان أو prompt أو المسار...",
+    },
     filters: {
       all: "الجميع",
+      byProvider: "التصفية حسب الموفر",
+      byProject: "التصفية حسب المشروع",
     },
     status: {
       connectHost: "اتصل بمضيف لاستيراد الجلسات",
@@ -347,6 +352,7 @@ export const ar: TranslationResources = {
       noRecent: "لا توجد جلسات حديثة لاستيرادها.",
       alreadyImported: "تم بالفعل استيراد كافة الجلسات الأخيرة.",
       noProviderSessions: "لم يتم العثور على جلسات{{provider}}.",
+      noMatchingResults: "لا توجد جلسات تطابق بحثك أو عوامل التصفية.",
     },
     row: {
       importing: "جارٍ الاستيراد...",

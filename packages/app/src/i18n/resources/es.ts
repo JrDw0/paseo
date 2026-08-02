@@ -327,8 +327,13 @@ export const es: TranslationResources = {
   },
   importSession: {
     title: "Importar sesión",
+    search: {
+      placeholder: "Buscar por título, prompt o ruta...",
+    },
     filters: {
       all: "Todo",
+      byProvider: "Filtrar por proveedor",
+      byProject: "Filtrar por proyecto",
     },
     status: {
       connectHost: "Conéctese a un host para importar sesiones",
@@ -350,6 +355,7 @@ export const es: TranslationResources = {
       noRecent: "No hay sesiones recientes para importar.",
       alreadyImported: "Todas las sesiones recientes ya están importadas.",
       noProviderSessions: "No se encontraron sesiones{{provider}}.",
+      noMatchingResults: "No hay sesiones que coincidan con su búsqueda o filtros.",
     },
     row: {
       importing: "Importador...",

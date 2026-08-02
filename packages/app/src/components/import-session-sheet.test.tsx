@@ -72,6 +72,7 @@ vi.mock("lucide-react-native", () => {
   };
   return {
     ChevronDown: icon("ChevronDown"),
+    Folder: icon("Folder"),
     Inbox: icon("Inbox"),
     Layers: icon("Layers"),
     RotateCw: icon("RotateCw"),
@@ -125,17 +126,37 @@ vi.mock("@/components/adaptive-modal-sheet", () => ({
     testID,
   }: {
     visible: boolean;
-    header?: { title: string; actions?: ReactNode };
+    header?: {
+      title: string;
+      actions?: ReactNode;
+      search?: {
+        onChange: (value: string) => void;
+        placeholder?: string;
+        autoFocus?: boolean;
+        testID?: string;
+        resetKey?: string | number;
+      };
+    };
     children: ReactNode;
     testID?: string;
-  }) =>
-    visible ? (
+  }) => {
+    const search = header?.search;
+    return visible ? (
       <section data-testid={testID}>
         <h1>{header?.title}</h1>
         {header?.actions}
+        {search
+          ? React.createElement("input", {
+              "data-testid": search.testID ?? "sheet-search",
+              placeholder: search.placeholder,
+              onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+                search.onChange(event.target.value),
+            })
+          : null}
         {children}
       </section>
-    ) : null,
+    ) : null;
+  },
 }));
 
 vi.mock("react-native", async () => {
@@ -871,5 +892,413 @@ describe("ImportSessionSheet", () => {
     await waitFor(() => {
       expect(fetchRecentProviderSessions).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("filters sessions as a search query matches titles", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-provider-sessions",
+      entries: [
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-alpha",
+          title: "Alpha pairing method",
+        }),
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-beta",
+          title: "Beta git cleanup",
+        }),
+      ],
+    }));
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      },
+    );
+
+    await screen.findByText("Alpha pairing method");
+    await screen.findByText("Beta git cleanup");
+
+    fireEvent.change(screen.getByTestId("import-session-search"), {
+      target: { value: "alpha" },
+    });
+
+    screen.getByText("Alpha pairing method");
+    expect(screen.queryByText("Beta git cleanup")).toBeNull();
+
+    fireEvent.change(screen.getByTestId("import-session-search"), {
+      target: { value: "" },
+    });
+
+    screen.getByText("Alpha pairing method");
+    screen.getByText("Beta git cleanup");
+  });
+
+  it("matches a search query against the prompt preview when the title is blank", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-provider-sessions",
+      entries: [
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-alpha",
+          title: null,
+          firstPromptPreview: "Alpha importer work",
+          lastPromptPreview: "Alpha importer work",
+        }),
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-beta",
+          title: null,
+          firstPromptPreview: "Beta unrelated change",
+          lastPromptPreview: "Beta unrelated change",
+        }),
+      ],
+    }));
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      },
+    );
+
+    await screen.findAllByText("Beta unrelated change");
+
+    fireEvent.change(screen.getByTestId("import-session-search"), {
+      target: { value: "alpha" },
+    });
+
+    expect(screen.queryAllByText("Alpha importer work").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Beta unrelated change")).toBeNull();
+  });
+
+  it("matches a search query against the session cwd", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-provider-sessions",
+      entries: [
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-alpha",
+          cwd: "/repo/alpha-project",
+          title: "First session",
+          firstPromptPreview: "neutral first",
+          lastPromptPreview: "neutral first",
+        }),
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-beta",
+          cwd: "/repo/beta-project",
+          title: "Second session",
+          firstPromptPreview: "neutral second",
+          lastPromptPreview: "neutral second",
+        }),
+      ],
+    }));
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        cwd: null,
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      },
+    );
+
+    await screen.findByText("First session");
+    await screen.findByText("Second session");
+
+    fireEvent.change(screen.getByTestId("import-session-search"), {
+      target: { value: "alpha-project" },
+    });
+
+    screen.getByText("First session");
+    expect(screen.queryByText("Second session")).toBeNull();
+  });
+
+  it("clears the search query when the sheet is closed and reopened", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-provider-sessions",
+      entries: [
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-alpha",
+          title: "Alpha pairing method",
+        }),
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-beta",
+          title: "Beta git cleanup",
+        }),
+      ],
+    }));
+    const importAgent = vi.fn();
+    const client = createRecentSessionsClient(fetchRecentProviderSessions, importAgent);
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    mockSnapshot.current = {
+      entries: [createSnapshotEntry("claude")],
+      supportsSnapshot: true,
+    };
+
+    function TestSheet({ visible }: { visible: boolean }) {
+      return (
+        <QueryClientProvider client={queryClient}>
+          <ImportSessionSheet
+            visible={visible}
+            client={client}
+            serverId="server-1"
+            cwd="/repo/paseo"
+            onClose={vi.fn()}
+            onImportedAgent={vi.fn()}
+          />
+        </QueryClientProvider>
+      );
+    }
+
+    const { rerender } = render(<TestSheet visible />);
+    await screen.findByText("Alpha pairing method");
+
+    fireEvent.change(screen.getByTestId("import-session-search"), {
+      target: { value: "alpha" },
+    });
+    expect(screen.queryByText("Beta git cleanup")).toBeNull();
+
+    rerender(<TestSheet visible={false} />);
+    rerender(<TestSheet visible />);
+
+    await screen.findByText("Beta git cleanup");
+    screen.getByText("Alpha pairing method");
+  });
+
+  it("filters by project path in global mode and restores on All", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-provider-sessions",
+      entries: [
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-alpha",
+          cwd: "/repo/alpha-project",
+          title: "Alpha session",
+        }),
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-beta",
+          cwd: "/repo/beta-project",
+          title: "Beta session",
+        }),
+      ],
+    }));
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        cwd: null,
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      },
+    );
+
+    await screen.findByText("Alpha session");
+    await screen.findByText("Beta session");
+
+    fireEvent.click(screen.getByTestId("import-session-project-filter-trigger"));
+    fireEvent.click(screen.getByTestId("import-session-filter-/repo/alpha-project"));
+
+    screen.getByText("Alpha session");
+    expect(screen.queryByText("Beta session")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("import-session-project-filter-trigger"));
+    fireEvent.click(screen.getByTestId("import-session-filter-all"));
+
+    screen.getByText("Alpha session");
+    screen.getByText("Beta session");
+  });
+
+  it("hides the project filter in workspace mode even when sessions span folders", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-provider-sessions",
+      entries: [
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-alpha",
+          cwd: "/repo/alpha-project",
+          title: "Alpha session",
+        }),
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-beta",
+          cwd: "/repo/beta-project",
+          title: "Beta session",
+        }),
+      ],
+    }));
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      },
+    );
+
+    await screen.findByText("Alpha session");
+    expect(screen.queryByTestId("import-session-project-filter-trigger")).toBeNull();
+  });
+
+  it("hides the project filter when every session in global mode shares one folder", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-provider-sessions",
+      entries: [
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-alpha",
+          cwd: "/repo/solo-project",
+          title: "Alpha session",
+        }),
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-beta",
+          cwd: "/repo/solo-project",
+          title: "Beta session",
+        }),
+      ],
+    }));
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        cwd: null,
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      },
+    );
+
+    await screen.findByText("Alpha session");
+    expect(screen.queryByTestId("import-session-project-filter-trigger")).toBeNull();
+  });
+
+  it("shows a generic no-match message when the search and provider filter leave nothing", async () => {
+    const fetchRecentProviderSessions = vi.fn(
+      async (options: { providers?: string[] } | undefined) => {
+        const provider = options?.providers?.[0] ?? "claude";
+        return {
+          requestId: `recent-${provider}`,
+          entries: [
+            createProviderSessionEntry({
+              providerId: provider,
+              providerLabel: provider,
+              providerHandleId: `${provider}-thread`,
+              title: `Session ${provider}`,
+            }),
+          ],
+        };
+      },
+    );
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        snapshot: {
+          supportsSnapshot: true,
+          entries: [createSnapshotEntry("claude"), createSnapshotEntry("codex")],
+        },
+      },
+    );
+
+    await screen.findByText("Session claude");
+    await screen.findByText("Session codex");
+
+    fireEvent.click(screen.getByTestId("import-session-filter-trigger"));
+    fireEvent.click(screen.getByTestId("import-session-filter-codex"));
+    screen.getByText("Session codex");
+
+    fireEvent.change(screen.getByTestId("import-session-search"), {
+      target: { value: "zzz-nope" },
+    });
+
+    await screen.findByText("No sessions match your search or filters.");
+    expect(screen.queryByText("No Codex sessions found.")).toBeNull();
+  });
+
+  it("renders the folder between the title and the prompt preview", async () => {
+    const fetchRecentProviderSessions = vi.fn(async () => ({
+      requestId: "recent-provider-sessions",
+      entries: [
+        createProviderSessionEntry({
+          providerId: "claude",
+          providerLabel: "Claude Code",
+          providerHandleId: "thread-ordered",
+          title: "Ordered session",
+          cwd: "/repo/ordered-path",
+          firstPromptPreview: "the ordered preview body",
+          lastPromptPreview: "the ordered preview body",
+        }),
+      ],
+    }));
+    const importAgent = vi.fn();
+
+    renderSheet(
+      { fetchRecentProviderSessions, importAgent } as Pick<
+        DaemonClient,
+        "fetchRecentProviderSessions" | "importAgent"
+      >,
+      {
+        cwd: null,
+        snapshot: { supportsSnapshot: true, entries: [createSnapshotEntry("claude")] },
+      },
+    );
+
+    const row = await screen.findByTestId("import-session-session-claude-thread-ordered");
+    const text = row.textContent ?? "";
+    const titleIndex = text.indexOf("Ordered session");
+    const cwdIndex = text.indexOf("/repo/ordered-path");
+    const previewIndex = text.indexOf("the ordered preview body");
+    expect(titleIndex).toBeGreaterThanOrEqual(0);
+    expect(cwdIndex).toBeGreaterThan(titleIndex);
+    expect(previewIndex).toBeGreaterThan(cwdIndex);
   });
 });

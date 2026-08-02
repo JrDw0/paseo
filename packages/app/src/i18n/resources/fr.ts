@@ -328,8 +328,13 @@ export const fr: TranslationResources = {
   },
   importSession: {
     title: "Session d'importation",
+    search: {
+      placeholder: "Rechercher par titre, prompt ou chemin...",
+    },
     filters: {
       all: "Tous",
+      byProvider: "Filtrer par fournisseur",
+      byProject: "Filtrer par projet",
     },
     status: {
       connectHost: "Connectez-vous à un hôte pour importer des sessions",
@@ -351,6 +356,7 @@ export const fr: TranslationResources = {
       noRecent: "Aucune session récente à importer.",
       alreadyImported: "Toutes les sessions récentes sont déjà importées.",
       noProviderSessions: "Aucune session{{provider}}trouvée.",
+      noMatchingResults: "Aucune session ne correspond à votre recherche ou à vos filtres.",
     },
     row: {
       importing: "Importation...",

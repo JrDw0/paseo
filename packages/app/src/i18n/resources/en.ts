@@ -323,8 +323,13 @@ export const en = {
   },
   importSession: {
     title: "Import session",
+    search: {
+      placeholder: "Search by title, prompt, or path...",
+    },
     filters: {
       all: "All",
+      byProvider: "Filter by provider",
+      byProject: "Filter by project",
     },
     status: {
       connectHost: "Connect to a host to import sessions",
@@ -346,6 +351,7 @@ export const en = {
       noRecent: "No recent sessions to import.",
       alreadyImported: "All recent sessions are already imported.",
       noProviderSessions: "No {{provider}} sessions found.",
+      noMatchingResults: "No sessions match your search or filters.",
     },
     row: {
       importing: "Importing...",
