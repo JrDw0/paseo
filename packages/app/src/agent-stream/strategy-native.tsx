@@ -45,6 +45,13 @@ import {
   createHistoryStartSettleScheduler,
   type HistoryStartSettleScheduler,
 } from "./history-start-settle-scheduler";
+import {
+  MESSAGE_JUMP_RETRY_DELAY_MS,
+  createPendingMessageJump,
+  planMessageJump,
+  recoverMessageJumpIndexFailure,
+  type PendingMessageJump,
+} from "./jump-to-message";
 
 const DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION = Object.freeze({
   minIndexForVisible: 0,
@@ -159,6 +166,20 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       ),
     [displayStateHistoryRows, historyRowRevision?.contentById],
   );
+  // Data-index lookup for jump-to-message; index 0 is the newest row. Display
+  // variants rebuild the item objects, but ids stay stable.
+  const historyRowIndexById = useMemo(() => {
+    const indexById = new Map<string, number>();
+    for (const [index, item] of historyRows.entries()) {
+      if (!indexById.has(item.id)) {
+        indexById.set(item.id, index);
+      }
+    }
+    return indexById;
+  }, [historyRows]);
+  const pendingMessageJumpRef = useRef<PendingMessageJump | null>(null);
+  const messageJumpTokenRef = useRef(0);
+  const messageJumpRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const getHistoryStartPaginationInput = useStableEvent((): HistoryStartPaginationInput => {
     const metrics = streamViewportMetricsRef.current;
     const hasMeasuredViewport =
@@ -311,6 +332,69 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       ? undefined
       : DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION;
 
+  const clearMessageJumpRetryTimeout = useCallback(() => {
+    if (messageJumpRetryTimeoutRef.current !== null) {
+      clearTimeout(messageJumpRetryTimeoutRef.current);
+      messageJumpRetryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scrollToMessage = useStableEvent((messageId: string) => {
+    clearMessageJumpRetryTimeout();
+    const plan = planMessageJump(historyRowIndexById, messageId);
+    if (plan.kind === "scroll-to-bottom") {
+      // Live-head rows render adjacent to the bottom edge; reuse the bottom anchor.
+      pendingMessageJumpRef.current = null;
+      bottomAnchorController.requestLocalAnchor({ agentId, reason: "jump-to-message" });
+      return;
+    }
+    messageJumpTokenRef.current += 1;
+    pendingMessageJumpRef.current = createPendingMessageJump({
+      token: messageJumpTokenRef.current,
+      messageId,
+      index: plan.index,
+    });
+    flatListRef.current?.scrollToIndex({ index: plan.index, viewPosition: 0.5, animated: true });
+  });
+
+  // Rows outside the render window have no measurable frame: jump to the
+  // estimated offset first so the rows mount, then retry scrollToIndex.
+  const handleScrollToIndexFailed = useStableEvent(
+    (info: { index: number; highestMeasuredFrameIndex: number; averageItemLength: number }) => {
+      clearMessageJumpRetryTimeout();
+      const recovery = recoverMessageJumpIndexFailure(pendingMessageJumpRef.current, {
+        index: info.index,
+        averageItemLength: info.averageItemLength,
+      });
+      if (!recovery) {
+        pendingMessageJumpRef.current = null;
+        return;
+      }
+      pendingMessageJumpRef.current = recovery.next;
+      const retryToken = recovery.next.token;
+      flatListRef.current?.scrollToOffset({ offset: recovery.fallbackOffset, animated: false });
+      messageJumpRetryTimeoutRef.current = setTimeout(() => {
+        messageJumpRetryTimeoutRef.current = null;
+        const pending = pendingMessageJumpRef.current;
+        if (!pending || pending.token !== retryToken || isUserScrollActiveRef.current) {
+          pendingMessageJumpRef.current = null;
+          return;
+        }
+        flatListRef.current?.scrollToIndex({
+          index: pending.index,
+          viewPosition: 0.5,
+          animated: true,
+        });
+      }, MESSAGE_JUMP_RETRY_DELAY_MS);
+    },
+  );
+
+  useEffect(() => {
+    return () => {
+      clearMessageJumpRetryTimeout();
+    };
+  }, [clearMessageJumpRetryTimeout]);
+
   useEffect(() => {
     streamViewportMetricsRef.current = {
       containerKey: "native-virtualized",
@@ -330,6 +414,8 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     const initialHistoryStartState = createHistoryStartPaginationState();
     historyStartPaginationStateRef.current = initialHistoryStartState;
     setHistoryStartPaginationState(initialHistoryStartState);
+    pendingMessageJumpRef.current = null;
+    clearMessageJumpRetryTimeout();
     const frame = requestAnimationFrame(() => {
       historyStartReadyRef.current = true;
       evaluateHistoryStart();
@@ -340,7 +426,13 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       historyStartSettleSchedulerRef.current?.cancel();
       historyStartSettleSchedulerRef.current = null;
     };
-  }, [agentId, clearNativeViewportSettling, clearPendingUserScrollEnd, evaluateHistoryStart]);
+  }, [
+    agentId,
+    clearMessageJumpRetryTimeout,
+    clearNativeViewportSettling,
+    clearPendingUserScrollEnd,
+    evaluateHistoryStart,
+  ]);
 
   useEffect(() => {
     const keyboardEvents = [
@@ -376,6 +468,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
           reason,
         });
       },
+      scrollToMessage: (messageId) => {
+        scrollToMessage(messageId);
+      },
       prepareForViewportChange: () => {
         bottomAnchorController.prepareForStickyViewportChange();
         markNativeViewportSettling();
@@ -387,7 +482,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
         viewportRef.current = null;
       }
     };
-  }, [agentId, bottomAnchorController, markNativeViewportSettling, viewportRef]);
+  }, [agentId, bottomAnchorController, markNativeViewportSettling, scrollToMessage, viewportRef]);
 
   const isScrollEventNearBottom = useStableEvent(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -616,6 +711,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       onMomentumScrollEnd={handleMomentumScrollEnd}
       scrollEventThrottle={16}
       onContentSizeChange={handleContentSizeChange}
+      onScrollToIndexFailed={handleScrollToIndexFailed}
       maintainVisibleContentPosition={maintainVisibleContentPosition}
       initialNumToRender={40}
       maxToRenderPerBatch={40}

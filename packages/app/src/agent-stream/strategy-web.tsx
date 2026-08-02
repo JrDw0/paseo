@@ -983,12 +983,37 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     rearmHistoryStartFromUserIntent,
   ]);
 
+  const scrollToMessage = useStableEvent((messageId: string) => {
+    // Jumping away hands the scroll position to the user; stop following output.
+    setFollowOutput(false);
+    cancelPendingStickToBottom();
+    const virtualIndex = segments.historyVirtualized.findIndex((item) => item.id === messageId);
+    if (virtualIndex >= 0) {
+      rowVirtualizer.scrollToIndex(virtualIndex, { align: "center", behavior: "smooth" });
+      return;
+    }
+    const escapedId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(messageId)
+        : messageId;
+    const node = contentRef.current?.querySelector(`[data-history-row-id="${escapedId}"]`);
+    if (node instanceof HTMLElement) {
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    // Target could not be located (or was unmounted mid-frame); settle at the bottom edge.
+    scrollMessagesToBottom("smooth");
+  });
+
   useEffect(() => {
     const handle: StreamViewportHandle = {
       scrollToBottom: () => {
         setFollowOutput(true);
         cancelPendingStickToBottom();
         forceStickToBottom();
+      },
+      scrollToMessage: (messageId) => {
+        scrollToMessage(messageId);
       },
       prepareForViewportChange: () => {
         if (!followOutputRef.current) {

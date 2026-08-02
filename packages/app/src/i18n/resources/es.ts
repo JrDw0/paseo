@@ -191,6 +191,14 @@ export const es: TranslationResources = {
     empty: "Comience a chatear con este agente...",
     scrollToBottom: "Desplazarse hacia abajo",
     historyLoadFailed: "No se pudo cargar el historial del agente",
+    messageJump: {
+      button: "Ir a un mensaje",
+      title: "Tus mensajes",
+      empty: "Aún no hay mensajes",
+      imageMessage: "(Imagen)",
+      attachmentMessage: "(Adjunto)",
+      close: "Cerrar",
+    },
     permission: {
       plan: "Plan",
       required: "Permiso requerido",

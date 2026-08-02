@@ -25,7 +25,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { Check, ChevronDown, X } from "lucide-react-native";
+import { Check, ChevronDown, List, X } from "lucide-react-native";
 import { usePanelStore } from "@/stores/panel-store";
 import {
   AssistantMessage,
@@ -59,6 +59,8 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { QuestionFormCard } from "@/components/question-form-card";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
+import { MessageJumpSheet, type MessageJumpEntry } from "@/components/message-jump-sheet";
+import { formatTimeAgo } from "@/utils/time";
 import {
   prepareToolCallHistory,
   projectToolCallDetailLevel,
@@ -231,6 +233,7 @@ function renderLiveHeadStreamItem(input: {
 
 export interface AgentStreamViewHandle {
   scrollToBottom(reason?: BottomAnchorLocalRequest["reason"]): void;
+  scrollToMessage(messageId: string): void;
   prepareForViewportChange(): void;
 }
 
@@ -558,6 +561,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         scrollToBottom(reason = "jump-to-bottom") {
           viewportRef.current?.scrollToBottom(reason);
         },
+        scrollToMessage(messageId: string) {
+          viewportRef.current?.scrollToMessage(messageId);
+        },
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
         },
@@ -579,6 +585,53 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         onError: handleTimelineHistoryLoadError,
       });
     }, [agentId, handleTimelineHistoryLoadError, isTimelineDetached, resolvedServerId]);
+
+    const [isMessageJumpSheetOpen, setIsMessageJumpSheetOpen] = useState(false);
+
+    const openMessageJumpSheet = useCallback(() => setIsMessageJumpSheetOpen(true), []);
+    const closeMessageJumpSheet = useCallback(() => setIsMessageJumpSheetOpen(false), []);
+
+    // Only already-loaded user messages can be jumped to; unpaginated history
+    // stays out until a loadOlder + retry flow exists.
+    const messageJumpEntries = useMemo<MessageJumpEntry[]>(() => {
+      const combined = [...projectedToolCalls.tail, ...(projectedToolCalls.head ?? [])];
+      const seen = new Set<string>();
+      const entries: MessageJumpEntry[] = [];
+      for (const item of combined) {
+        if (item.kind !== "user_message" || seen.has(item.id)) {
+          continue;
+        }
+        seen.add(item.id);
+        const firstLine = item.text
+          .split("\n")
+          .map((line) => line.trim())
+          .find((line) => line.length > 0);
+        const hasImages = (item.images?.length ?? 0) > 0;
+        const hasAttachments = (item.attachments?.length ?? 0) > 0;
+        let preview: string;
+        if (firstLine) {
+          preview = firstLine;
+        } else if (hasImages) {
+          preview = t("agentStream.messageJump.imageMessage");
+        } else if (hasAttachments) {
+          preview = t("agentStream.messageJump.attachmentMessage");
+        } else {
+          preview = "…";
+        }
+        entries.push({
+          id: item.id,
+          preview,
+          timestampLabel: formatTimeAgo(item.timestamp),
+          hasImages,
+        });
+      }
+      return entries;
+    }, [projectedToolCalls.head, projectedToolCalls.tail, t]);
+
+    const handleJumpToMessage = useCallback((messageId: string) => {
+      setIsMessageJumpSheetOpen(false);
+      viewportRef.current?.scrollToMessage(messageId);
+    }, []);
 
     const setInlineDetailsExpanded = useCallback(
       (itemId: string, expanded: boolean) => {
@@ -1025,6 +1078,25 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               </Animated.View>
             </View>
           )}
+          {messageJumpEntries.length > 0 && (
+            <View style={stylesheet.messageJumpContainer} pointerEvents="box-none">
+              <Pressable
+                style={stylesheet.messageJumpButton}
+                onPress={openMessageJumpSheet}
+                accessibilityRole="button"
+                accessibilityLabel={t("agentStream.messageJump.button")}
+                testID="message-jump-button"
+              >
+                <List size={20} color={stylesheet.messageJumpIcon.color} />
+              </Pressable>
+            </View>
+          )}
+          <MessageJumpSheet
+            visible={isMessageJumpSheetOpen}
+            entries={messageJumpEntries}
+            onSelect={handleJumpToMessage}
+            onClose={closeMessageJumpSheet}
+          />
         </AssistantSelectionCopySurface>
       </ToolCallSheetProvider>
     );
@@ -1535,6 +1607,25 @@ const stylesheet = StyleSheet.create((theme) => ({
     ...theme.shadow.sm,
   },
   scrollToBottomIcon: {
+    color: theme.colors.foreground,
+  },
+  messageJumpContainer: {
+    position: "absolute",
+    bottom: 80,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  messageJumpButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: theme.colors.surface2,
+    alignItems: "center",
+    justifyContent: "center",
+    ...theme.shadow.sm,
+  },
+  messageJumpIcon: {
     color: theme.colors.foreground,
   },
 }));

@@ -193,6 +193,14 @@ export const fr: TranslationResources = {
     empty: "Commencez à discuter avec cet agent...",
     scrollToBottom: "Faire défiler vers le bas",
     historyLoadFailed: "Impossible de charger l’historique de l’agent",
+    messageJump: {
+      button: "Aller à un message",
+      title: "Vos messages",
+      empty: "Aucun message pour le moment",
+      imageMessage: "(Image)",
+      attachmentMessage: "(Pièce jointe)",
+      close: "Fermer",
+    },
     permission: {
       plan: "Plan",
       required: "Autorisation requise",

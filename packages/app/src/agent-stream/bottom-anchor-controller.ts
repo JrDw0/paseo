@@ -10,7 +10,7 @@ export interface BottomAnchorRouteRequest {
 }
 
 export interface BottomAnchorLocalRequest {
-  reason: "jump-to-bottom" | "message-sent";
+  reason: "jump-to-bottom" | "jump-to-message" | "message-sent";
   agentId: string;
 }
 
@@ -466,7 +466,10 @@ function createBottomAnchorControllerDriver(
         ? "sticky-bottom"
         : __private__.deriveModeForLocalRequest({ reason: request.reason }),
     );
-    evaluate(request.reason === "jump-to-bottom", "request_created");
+    evaluate(
+      request.reason === "jump-to-bottom" || request.reason === "jump-to-message",
+      "request_created",
+    );
   };
 
   return {

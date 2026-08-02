@@ -191,6 +191,14 @@ export const ja: TranslationResources = {
     empty: "このエージェントとチャットを始めましょう...",
     scrollToBottom: "下にスクロール",
     historyLoadFailed: "エージェントの履歴を読み込めませんでした",
+    messageJump: {
+      button: "メッセージへ移動",
+      title: "自分のメッセージ",
+      empty: "まだメッセージがありません",
+      imageMessage: "（画像）",
+      attachmentMessage: "（添付ファイル）",
+      close: "閉じる",
+    },
     permission: {
       plan: "プラン",
       required: "権限が必要です",

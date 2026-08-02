@@ -191,6 +191,14 @@ export const ptBR: TranslationResources = {
     empty: "Comece a conversar com este agente...",
     scrollToBottom: "Rolar para o fim",
     historyLoadFailed: "Não foi possível carregar o histórico do agente",
+    messageJump: {
+      button: "Ir para uma mensagem",
+      title: "Suas mensagens",
+      empty: "Ainda não há mensagens",
+      imageMessage: "(Imagem)",
+      attachmentMessage: "(Anexo)",
+      close: "Fechar",
+    },
     permission: {
       plan: "Plano",
       required: "Permissão necessária",
