@@ -946,6 +946,7 @@ export const fr: TranslationResources = {
         label: "Titre",
         title: "Titre",
         branch: "Nom de branche",
+        agent: "Session d'agent",
       },
       show: {
         label: "Afficher",
@@ -965,6 +966,10 @@ export const fr: TranslationResources = {
         label: "Hôte",
         all: "Tous les hôtes",
       },
+    },
+    filter: {
+      placeholder: "Filtrer les espaces de travail",
+      noResults: "Aucun espace de travail ne correspond",
     },
     pinned: {
       title: "Épinglés",

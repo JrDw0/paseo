@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
+Bot,
   Captions,
   CircleCheck,
   CircleDashed,
@@ -61,6 +62,7 @@ const GROUPING_ICONS: Record<SidebarGroupMode, OptionIcon> = {
 const TITLE_SOURCE_ICONS: Record<WorkspaceTitleSource, OptionIcon> = {
   title: withUnistyles(Type),
   branch: withUnistyles(GitBranch),
+  agent: withUnistyles(Bot),
 };
 
 // The same marks these things carry on the workspace row itself, so the menu and the row it
@@ -85,7 +87,7 @@ const TRAILING_ICONS: Record<SidebarTrailingChoice, OptionIcon> = {
 };
 
 const GROUPING_MODES: readonly SidebarGroupMode[] = ["project", "status"];
-const TITLE_SOURCES: readonly WorkspaceTitleSource[] = ["title", "branch"];
+const TITLE_SOURCES: readonly WorkspaceTitleSource[] = ["title", "branch", "agent"];
 const TRAILING_CHOICES: readonly SidebarTrailingChoice[] = ["diff", "timestamp"];
 
 const GROUPING_LABEL_KEYS: Record<SidebarGroupMode, string> = {
@@ -96,6 +98,7 @@ const GROUPING_LABEL_KEYS: Record<SidebarGroupMode, string> = {
 const TITLE_SOURCE_LABEL_KEYS: Record<WorkspaceTitleSource, string> = {
   title: "sidebar.display.titleSource.title",
   branch: "sidebar.display.titleSource.branch",
+  agent: "sidebar.display.titleSource.agent",
 };
 
 const ROW_ITEM_LABEL_KEYS: Record<SidebarRowItem, string> = {

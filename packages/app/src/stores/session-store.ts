@@ -2022,6 +2022,7 @@ export const useSessionStore = create<SessionStore>()(
           entries.push({
             id: agent.id,
             serverId,
+            parentAgentId: agent.parentAgentId,
             title: agent.title ?? null,
             status: agent.status,
             lastActivityAt,

@@ -19,6 +19,7 @@ import {
   useEffect,
   useRef,
   type ReactElement,
+  type ReactNode,
   type MutableRefObject,
   type Ref,
   type ComponentProps,
@@ -151,6 +152,20 @@ import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { useHostBadges } from "@/hosts/use-host-badges";
 import { useSidebarRowItems } from "@/components/sidebar/display-preferences/model";
+import { useAppSettings } from "@/hooks/use-settings";
+import { useWorkspaceRowAgentMeta } from "@/hooks/use-workspace-row-agent-meta";
+import {
+  SidebarRowAgentMetaProvider,
+  SidebarWorkspaceFilterProvider,
+  useSidebarFilterText,
+  useSidebarWorkspaceFilter,
+} from "@/components/sidebar/sidebar-workspace-list-context";
+import {
+  normalizeSidebarFilterQuery,
+  resolveSidebarWorkspaceFilterFields,
+  sidebarWorkspaceFilterFieldsMatch,
+  type SidebarWorkspaceFilterPredicate,
+} from "@/utils/sidebar-workspace-filter";
 
 const workspaceKeyExtractor = (workspace: SidebarWorkspacePlacement) => workspace.workspaceKey;
 
@@ -1924,43 +1939,98 @@ export function SidebarWorkspaceList({
     projects: statusProjectIconTargets,
   });
 
-  const content =
-    groupMode === "status" ? (
-      <SidebarStatusModeWrapper
-        statusGroups={statusGroups}
-        pinnedGroups={pinnedGroups}
-        workspaceEntriesByKey={workspaceEntriesByKey}
-        projectIconByProjectViewKey={statusProjectIconByProjectViewKey}
-        shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-        onWorkspacePress={onWorkspacePress}
-        hostBadgeByServerId={hostBadgeByServerId}
-        supportsPinningByServerId={supportsPinningByServerId}
-        onToggleWorkspacePin={onToggleWorkspacePin}
-        listHeaderComponent={listHeaderComponent}
-      />
-    ) : (
-      <ProjectModeList
-        projects={projects}
-        pinnedGroups={pinnedGroups}
-        workspaceEntriesByKey={workspaceEntriesByKey}
-        collapsedProjectKeys={collapsedProjectKeys}
-        onToggleProjectCollapsed={onToggleProjectCollapsed}
-        shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
-        onWorkspacePress={onWorkspacePress}
-        onAddProject={onAddProject}
-        listFooterComponent={listFooterComponent}
-        listHeaderComponent={listHeaderComponent}
-        parentGestureRef={parentGestureRef}
-        dragGestureHostPresented={dragGestureHostPresented}
-        pathname={pathname}
-        hostBadgeByServerId={hostBadgeByServerId}
-        supportsMultiplicityByServerId={supportsMultiplicityByServerId}
-        supportsPinningByServerId={supportsPinningByServerId}
-        onToggleWorkspacePin={onToggleWorkspacePin}
-      />
-    );
+  const agentMetaByWorkspaceKey = useWorkspaceRowAgentMeta();
+  const {
+    settings: { workspaceTitleSource },
+  } = useAppSettings();
+  const isCompact = useIsCompactFormFactor();
+  const filterTextContext = useSidebarFilterText();
+  // The compact header's filter input drives this list; desktop has no input
+  // yet, so the predicate stays off there instead of hiding rows silently. A
+  // host's badge visibility can hide its label while it is still a useful thing
+  // to filter by, so the filter keeps its own label lookup instead of reusing
+  // the display-gated badge map.
+  const hostLabelByServerId = useMemo(
+    () => new Map(hosts.map((host) => [host.serverId, host.label.trim() || host.serverId])),
+    [hosts],
+  );
+  const filterPredicate = useMemo<SidebarWorkspaceFilterPredicate | null>(() => {
+    const normalizedQuery = isCompact
+      ? normalizeSidebarFilterQuery(filterTextContext?.filterText ?? "")
+      : "";
+    if (!normalizedQuery) {
+      return null;
+    }
+    return (row) => {
+      const fields = resolveSidebarWorkspaceFilterFields({
+        row,
+        entry: workspaceEntriesByKey.get(row.workspaceKey) ?? null,
+        agentMeta: agentMetaByWorkspaceKey.get(`${row.serverId}:${row.workspaceId}`) ?? null,
+        hostLabel: hostLabelByServerId.get(row.serverId) ?? row.serverId,
+        workspaceTitleSource,
+      });
+      return sidebarWorkspaceFilterFieldsMatch(fields, normalizedQuery);
+    };
+  }, [
+    agentMetaByWorkspaceKey,
+    filterTextContext?.filterText,
+    hostLabelByServerId,
+    isCompact,
+    workspaceEntriesByKey,
+    workspaceTitleSource,
+  ]);
+
+  const content = (
+    <SidebarRowAgentMetaProvider value={agentMetaByWorkspaceKey}>
+      <SidebarWorkspaceFilterProvider value={filterPredicate}>
+        {groupMode === "status" ? (
+          <SidebarStatusModeWrapper
+            statusGroups={statusGroups}
+            pinnedGroups={pinnedGroups}
+            workspaceEntriesByKey={workspaceEntriesByKey}
+            projectIconByProjectViewKey={statusProjectIconByProjectViewKey}
+            shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
+            onWorkspacePress={onWorkspacePress}
+            hostBadgeByServerId={hostBadgeByServerId}
+            supportsPinningByServerId={supportsPinningByServerId}
+            onToggleWorkspacePin={onToggleWorkspacePin}
+            listHeaderComponent={listHeaderComponent}
+          />
+        ) : (
+          <ProjectModeList
+            projects={projects}
+            pinnedGroups={pinnedGroups}
+            workspaceEntriesByKey={workspaceEntriesByKey}
+            collapsedProjectKeys={collapsedProjectKeys}
+            onToggleProjectCollapsed={onToggleProjectCollapsed}
+            shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
+            onWorkspacePress={onWorkspacePress}
+            onAddProject={onAddProject}
+            listFooterComponent={listFooterComponent}
+            listHeaderComponent={listHeaderComponent}
+            parentGestureRef={parentGestureRef}
+            dragGestureHostPresented={dragGestureHostPresented}
+            pathname={pathname}
+            hostBadgeByServerId={hostBadgeByServerId}
+            supportsMultiplicityByServerId={supportsMultiplicityByServerId}
+            supportsPinningByServerId={supportsPinningByServerId}
+            onToggleWorkspacePin={onToggleWorkspacePin}
+          />
+        )}
+      </SidebarWorkspaceFilterProvider>
+    </SidebarRowAgentMetaProvider>
+  );
 
   return content;
+}
+
+function SidebarFilterNoResults() {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.filterNoResults} testID="sidebar-filter-no-results">
+      <Text style={styles.filterNoResultsText}>{t("sidebar.filter.noResults")}</Text>
+    </View>
+  );
 }
 
 function SidebarStatusModeWrapper({
@@ -1987,23 +2057,44 @@ function SidebarStatusModeWrapper({
   listHeaderComponent?: ReactElement | null;
 }) {
   const showShortcutBadges = useShowShortcutBadges();
+  const workspaceFilter = useSidebarWorkspaceFilter();
+  const filteredGroups = useMemo(() => {
+    if (!workspaceFilter) {
+      return statusGroups;
+    }
+    return statusGroups
+      .map((group) => ({ ...group, rows: group.rows.filter((row) => workspaceFilter(row)) }))
+      .filter((group) => group.rows.length > 0);
+  }, [statusGroups, workspaceFilter]);
+  const filteredPinnedWorkspaces = useMemo(() => {
+    const entries = pinnedGroups.pinnedChats.flatMap((workspace) => {
+      const entry = workspaceEntriesByKey.get(workspace.workspaceKey);
+      return entry ? [entry] : [];
+    });
+    if (!workspaceFilter) {
+      return entries;
+    }
+    return entries.filter((entry) => workspaceFilter(entry));
+  }, [pinnedGroups.pinnedChats, workspaceEntriesByKey, workspaceFilter]);
+  const hasFilterMatches =
+    !workspaceFilter || filteredGroups.length > 0 || filteredPinnedWorkspaces.length > 0;
 
   return (
-    <SidebarStatusWorkspaceList
-      groups={statusGroups}
-      pinnedWorkspaces={pinnedGroups.pinnedChats.flatMap((workspace) => {
-        const entry = workspaceEntriesByKey.get(workspace.workspaceKey);
-        return entry ? [entry] : [];
-      })}
-      projectIconByProjectViewKey={projectIconByProjectViewKey}
-      shortcutIndexByWorkspaceKey={_projectShortcutIndex}
-      showShortcutBadges={showShortcutBadges}
-      onWorkspacePress={onWorkspacePress}
-      hostBadgeByServerId={hostBadgeByServerId}
-      supportsPinningByServerId={supportsPinningByServerId}
-      onToggleWorkspacePin={onToggleWorkspacePin}
-      listHeaderComponent={listHeaderComponent}
-    />
+    <>
+      <SidebarStatusWorkspaceList
+        groups={filteredGroups}
+        pinnedWorkspaces={filteredPinnedWorkspaces}
+        projectIconByProjectViewKey={projectIconByProjectViewKey}
+        shortcutIndexByWorkspaceKey={_projectShortcutIndex}
+        showShortcutBadges={showShortcutBadges}
+        onWorkspacePress={onWorkspacePress}
+        hostBadgeByServerId={hostBadgeByServerId}
+        supportsPinningByServerId={supportsPinningByServerId}
+        onToggleWorkspacePin={onToggleWorkspacePin}
+        listHeaderComponent={listHeaderComponent}
+      />
+      {!hasFilterMatches && statusGroups.length > 0 ? <SidebarFilterNoResults /> : null}
+    </>
   );
 }
 
@@ -2056,12 +2147,32 @@ function ProjectModeList({
   const selectionEnabled = isWorkspaceRoute;
   const activeWorkspaceSelection = useActiveWorkspaceSelection();
   const { pinnedChats, unpinnedProjects } = pinnedGroups;
+  const workspaceFilter = useSidebarWorkspaceFilter();
+  const filteredPinnedChats = useMemo(
+    () => (workspaceFilter ? pinnedChats.filter((row) => workspaceFilter(row)) : pinnedChats),
+    [pinnedChats, workspaceFilter],
+  );
+  // Zero-match projects are hidden entirely while filtering; untouched projects
+  // keep their identity so memoized blocks skip re-render.
+  const filteredUnpinnedProjects = useMemo(() => {
+    if (!workspaceFilter) {
+      return unpinnedProjects;
+    }
+    return unpinnedProjects
+      .map((project) => {
+        const workspaces = project.workspaces.filter((row) => workspaceFilter(row));
+        return workspaces.length === project.workspaces.length
+          ? project
+          : { ...project, workspaces };
+      })
+      .filter((project) => project.workspaces.length > 0);
+  }, [unpinnedProjects, workspaceFilter]);
   const {
     visibleItems: visiblePinnedChats,
     expanded: pinnedChatsExpanded,
     canToggle: canTogglePinnedChats,
     toggleExpanded: togglePinnedChatsExpanded,
-  } = useLimitedSidebarGroup(pinnedChats);
+  } = useLimitedSidebarGroup(filteredPinnedChats);
   const projectIconTargets = useMemo(() => resolveSidebarProjectIconTargets(projects), [projects]);
   const nativeScrollGestureProps = useMemo(
     () =>
@@ -2306,9 +2417,43 @@ function ProjectModeList({
     ],
   );
 
+  let projectListContent: ReactNode;
+  if (projects.length === 0) {
+    projectListContent = (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyTitle} testID="sidebar-project-empty-state">
+          {t("sidebar.project.empty.title")}
+        </Text>
+        <Text style={styles.emptyText}>{t("sidebar.project.empty.description")}</Text>
+        <Button variant="ghost" size="sm" leftIcon={Plus} onPress={onAddProject}>
+          {t("sidebar.actions.addProject")}
+        </Button>
+      </View>
+    );
+  } else if (workspaceFilter && filteredUnpinnedProjects.length === 0) {
+    projectListContent = <SidebarFilterNoResults />;
+  } else {
+    projectListContent = (
+      <DraggableList
+        testID="sidebar-project-list"
+        data={filteredUnpinnedProjects}
+        keyExtractor={projectViewKeyExtractor}
+        renderItem={renderProject}
+        onDragEnd={handleProjectDragEnd}
+        extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
+        scrollEnabled={false}
+        useDragHandle
+        nestable={platformIsNative}
+        simultaneousGestureRef={parentGestureRef}
+        gestureHostPresented={dragGestureHostPresented}
+        containerStyle={styles.projectListContainer}
+      />
+    );
+  }
+
   const content = (
     <>
-      {pinnedChats.length > 0 ? (
+      {filteredPinnedChats.length > 0 ? (
         <View style={styles.pinnedSection} testID="sidebar-pinned-section">
           <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
           {pinnedCollapsed ? null : (
@@ -2326,32 +2471,7 @@ function ProjectModeList({
         </View>
       ) : null}
       {unpinnedProjects.length > 0 || hasActiveHostFilter ? listHeaderComponent : null}
-      {projects.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle} testID="sidebar-project-empty-state">
-            {t("sidebar.project.empty.title")}
-          </Text>
-          <Text style={styles.emptyText}>{t("sidebar.project.empty.description")}</Text>
-          <Button variant="ghost" size="sm" leftIcon={Plus} onPress={onAddProject}>
-            {t("sidebar.actions.addProject")}
-          </Button>
-        </View>
-      ) : (
-        <DraggableList
-          testID="sidebar-project-list"
-          data={unpinnedProjects}
-          keyExtractor={projectViewKeyExtractor}
-          renderItem={renderProject}
-          onDragEnd={handleProjectDragEnd}
-          extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
-          scrollEnabled={false}
-          useDragHandle
-          nestable={platformIsNative}
-          simultaneousGestureRef={parentGestureRef}
-          gestureHostPresented={dragGestureHostPresented}
-          containerStyle={styles.projectListContainer}
-        />
-      )}
+      {projectListContent}
       {listFooterComponent}
     </>
   );
@@ -2385,6 +2505,15 @@ function ProjectModeList({
 const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
+  },
+  filterNoResults: {
+    alignItems: "center",
+    paddingVertical: theme.spacing[6],
+    paddingHorizontal: theme.spacing[4],
+  },
+  filterNoResultsText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
   list: {
     flex: 1,

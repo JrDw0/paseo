@@ -908,6 +908,7 @@ export const zhCN: TranslationResources = {
         label: "标题",
         title: "标题",
         branch: "分支名称",
+        agent: "Agent 会话",
       },
       show: {
         label: "显示",
@@ -927,6 +928,10 @@ export const zhCN: TranslationResources = {
         label: "主机",
         all: "所有主机",
       },
+    },
+    filter: {
+      placeholder: "筛选 workspace",
+      noResults: "没有匹配的 workspace",
     },
     pinned: {
       title: "已置顶",

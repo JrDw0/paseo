@@ -938,6 +938,7 @@ export const ptBR: TranslationResources = {
         label: "Título",
         title: "Título",
         branch: "Nome da branch",
+        agent: "Sessão do agente",
       },
       show: {
         label: "Mostrar",
@@ -957,6 +958,10 @@ export const ptBR: TranslationResources = {
         label: "Host",
         all: "Todos os hosts",
       },
+    },
+    filter: {
+      placeholder: "Filtrar espaços de trabalho",
+      noResults: "Nenhum espaço de trabalho corresponde ao filtro",
     },
     pinned: {
       title: "Fixados",

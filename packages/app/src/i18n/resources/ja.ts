@@ -927,6 +927,7 @@ export const ja: TranslationResources = {
         label: "タイトル",
         title: "タイトル",
         branch: "ブランチ名",
+        agent: "エージェントセッション",
       },
       show: {
         label: "表示項目",
@@ -946,6 +947,10 @@ export const ja: TranslationResources = {
         label: "ホスト",
         all: "すべてのホスト",
       },
+    },
+    filter: {
+      placeholder: "ワークスペースを絞り込む",
+      noResults: "一致するワークスペースがありません",
     },
     pinned: {
       title: "固定済み",

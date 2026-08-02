@@ -71,6 +71,7 @@ export async function fetchAgentHistoryPage(input: {
       id: agent.id,
       serverId: input.serverId,
       serverLabel: input.serverId,
+      parentAgentId: agent.parentAgentId,
       title: agent.title ?? null,
       status: agent.status,
       lastActivityAt: agent.lastActivityAt,

@@ -926,6 +926,7 @@ export const en = {
         label: "Title",
         title: "Title",
         branch: "Branch name",
+        agent: "Agent session",
       },
       show: {
         label: "Show",
@@ -945,6 +946,10 @@ export const en = {
         label: "Host",
         all: "All hosts",
       },
+    },
+    filter: {
+      placeholder: "Filter workspaces",
+      noResults: "No workspaces match",
     },
     pinned: {
       title: "Pinned",

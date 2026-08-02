@@ -916,6 +916,7 @@ export const ar: TranslationResources = {
         label: "العنوان",
         title: "العنوان",
         branch: "اسم الفرع",
+        agent: "جلسة الوكيل",
       },
       show: {
         label: "إظهار",
@@ -935,6 +936,10 @@ export const ar: TranslationResources = {
         label: "المضيف",
         all: "كل المضيفين",
       },
+    },
+    filter: {
+      placeholder: "تصفية مساحات العمل",
+      noResults: "لا توجد مساحات عمل مطابقة",
     },
     pinned: {
       title: "المثبتة",

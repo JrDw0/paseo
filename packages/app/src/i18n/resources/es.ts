@@ -947,6 +947,7 @@ export const es: TranslationResources = {
         label: "Título",
         title: "Título",
         branch: "Nombre de rama",
+        agent: "Sesión del agente",
       },
       show: {
         label: "Mostrar",
@@ -966,6 +967,10 @@ export const es: TranslationResources = {
         label: "Host",
         all: "Todos los hosts",
       },
+    },
+    filter: {
+      placeholder: "Filtrar espacios de trabajo",
+      noResults: "Ningún espacio de trabajo coincide",
     },
     pinned: {
       title: "Anclados",

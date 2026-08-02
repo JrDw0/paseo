@@ -938,6 +938,7 @@ export const ru: TranslationResources = {
         label: "Заголовок",
         title: "Заголовок",
         branch: "Имя ветки",
+        agent: "Сессия агента",
       },
       show: {
         label: "Показывать",
@@ -957,6 +958,10 @@ export const ru: TranslationResources = {
         label: "Хост",
         all: "Все хосты",
       },
+    },
+    filter: {
+      placeholder: "Фильтровать рабочие области",
+      noResults: "Нет подходящих рабочих областей",
     },
     pinned: {
       title: "Закреплённые",
