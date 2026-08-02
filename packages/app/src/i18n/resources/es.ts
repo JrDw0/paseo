@@ -929,6 +929,7 @@ export const es: TranslationResources = {
       home: "Hogar",
       settings: "Ajustes",
       closeSidebar: "Cerrar barra lateral",
+      importRecentSessions: "Importar sesión reciente",
     },
     help: {
       trigger: "Ayuda y soporte",

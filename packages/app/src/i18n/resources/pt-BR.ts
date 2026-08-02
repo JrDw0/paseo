@@ -920,6 +920,7 @@ export const ptBR: TranslationResources = {
       home: "Início",
       settings: "Configurações",
       closeSidebar: "Fechar barra lateral",
+      importRecentSessions: "Importar sessão recente",
     },
     help: {
       trigger: "Ajuda e suporte",

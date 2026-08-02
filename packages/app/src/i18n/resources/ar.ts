@@ -898,6 +898,7 @@ export const ar: TranslationResources = {
       home: "بيت",
       settings: "إعدادات",
       closeSidebar: "إغلاق الشريط الجانبي",
+      importRecentSessions: "استيراد جلسة حديثة",
     },
     help: {
       trigger: "المساعدة والدعم",

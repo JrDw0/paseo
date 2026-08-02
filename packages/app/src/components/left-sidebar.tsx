@@ -68,6 +68,7 @@ import {
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
+import { SidebarImportRecentButton } from "./sidebar/sidebar-import-recent-button";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
 
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
@@ -948,6 +949,7 @@ function WorkspacesSectionHeader() {
             <IconTooltipContent label="Search" shortcutKeys={commandCenterKeys} />
           </TooltipContent>
         </Tooltip>
+        <SidebarImportRecentButton />
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <View>
