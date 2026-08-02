@@ -19,7 +19,8 @@
         "APP_VARIANT": "production"
       },
       "android": {
-        "resourceClass": "large"
+        "resourceClass": "large",
+        "gradleCommand": ":app:bundleRelease -PreactNativeArchitectures=arm64-v8a"
       }
     },
     "production-apk": {
@@ -28,7 +29,7 @@
       "android": {
         "resourceClass": "large",
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease -x generateReleaseLintModel -x generateReleaseLintVitalModel"
+        "gradleCommand": ":app:assembleRelease -x lint -x lintVitalAnalyzeRelease -x lintVitalRelease -x generateReleaseLintModel -x generateReleaseLintVitalModel -PreactNativeArchitectures=arm64-v8a"
       }
     }
   },
