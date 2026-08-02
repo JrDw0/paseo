@@ -1,3 +1,4 @@
+import type { Locator } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import {
   awaitAssistantMessage,
@@ -21,6 +22,10 @@ import { expectComposerVisible, startRunningMockAgent } from "./helpers/composer
 import { openAgentRoute, seedMockAgentWorkspace } from "./helpers/mock-agent";
 
 const SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE = 360;
+
+async function readFloatingActionsOpacity(actions: Locator): Promise<number> {
+  return actions.evaluate((element) => Number(window.getComputedStyle(element).opacity));
+}
 
 test.describe("Agent stream UI", () => {
   test("auto-scroll sticks to bottom across token bursts", async ({ page }) => {
@@ -155,6 +160,58 @@ test.describe("Agent stream UI", () => {
 
       const finalMetrics = await readScrollMetrics(page);
       expect(finalMetrics.contentHeight).toBeGreaterThan(baseline.contentHeight);
+    } finally {
+      await agent.cleanup();
+    }
+  });
+
+  test("restores floating actions after scrolling stops and the pointer is released", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    const agent = await seedMockAgentWorkspace({
+      repoPrefix: "stream-floating-actions-settle-",
+      title: "Floating actions settle",
+      model: "ten-second-stream",
+      initialPrompt: "Stream enough content to exercise floating action visibility.",
+    });
+    try {
+      await agent.client.waitForFinish(agent.agentId, 30_000);
+      await openAgentRoute(page, {
+        workspaceId: agent.workspaceId,
+        agentId: agent.agentId,
+      });
+      await waitForScrollableChat(page, {
+        minScrollableDistance: SCROLL_AWAY_MIN_SCROLLABLE_DISTANCE,
+        timeout: 30_000,
+      });
+
+      const chatScroll = page.locator('[data-testid="agent-chat-scroll"]:visible').first();
+      const actions = page.getByTestId("agent-stream-floating-actions");
+      const box = await chatScroll.boundingBox();
+      if (!box) {
+        throw new Error("Agent chat scroll container is not visible");
+      }
+
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.wheel(0, -900);
+      await expect
+        .poll(async () => (await readScrollMetrics(page)).distanceFromBottom, { timeout: 1_000 })
+        .toBeGreaterThan(300);
+      await expect
+        .poll(() => readFloatingActionsOpacity(actions), { timeout: 1_000 })
+        .toBeLessThan(0.05);
+
+      // Keep the pointer held beyond the normal settle delay: this must remain
+      // hidden until the user releases it.
+      await page.waitForTimeout(450);
+      expect(await readFloatingActionsOpacity(actions)).toBeLessThan(0.05);
+
+      await page.mouse.up();
+      await expect
+        .poll(() => readFloatingActionsOpacity(actions), { timeout: 2_000 })
+        .toBeGreaterThan(0.95);
     } finally {
       await agent.cleanup();
     }

@@ -115,7 +115,8 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     routeBottomAnchorRequest,
     isAuthoritativeHistoryReady,
     onNearBottomChange,
-    onScrollVelocityChange,
+    onScrollMovementChange,
+    onScrollInteractionChange,
     onNearHistoryStart,
     isLoadingOlderHistory,
     hasOlderHistory,
@@ -139,9 +140,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     return value;
   };
   const lastKnownScrollTopRef = useRef(0);
-  const scrollVelocitySampleMsRef = useRef(0);
   const pendingUserScrollUpIntentRef = useRef(false);
   const isPointerScrollActiveRef = useRef(false);
+  const isTouchScrollActiveRef = useRef(false);
   const lastTouchClientYRef = useRef<number | null>(null);
   const pendingAutoScrollFrameRef = useRef<number | null>(null);
   const pendingAutoScrollTimeoutRef = useRef<number | null>(null);
@@ -332,22 +333,21 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
     const scrollDeltaY = currentScrollTop - lastKnownScrollTopRef.current;
     lastKnownScrollTopRef.current = currentScrollTop;
-    if (onScrollVelocityChange) {
-      const now = Date.now();
-      const elapsedMs = now - scrollVelocitySampleMsRef.current;
-      scrollVelocitySampleMsRef.current = now;
-      if (elapsedMs > 0) {
-        onScrollVelocityChange((scrollDeltaY / elapsedMs) * 1000);
-      }
+    if (scrollDeltaY !== 0) {
+      onScrollMovementChange?.(scrollDeltaY);
     }
     updateScrollMetrics();
     evaluateHistoryStart();
   }, [
     cancelPendingStickToBottom,
     evaluateHistoryStart,
-    onScrollVelocityChange,
+    onScrollMovementChange,
     updateScrollMetrics,
   ]);
+
+  const updateScrollInteraction = useStableEvent(() => {
+    onScrollInteractionChange?.(isPointerScrollActiveRef.current || isTouchScrollActiveRef.current);
+  });
 
   useEffect(() => {
     historyStartPaginationStateRef.current = createHistoryStartPaginationState();
@@ -474,16 +474,20 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     };
     const handlePointerDown = () => {
       isPointerScrollActiveRef.current = true;
+      updateScrollInteraction();
     };
-    const handlePointerUp = () => {
+    const handlePointerEnd = () => {
       isPointerScrollActiveRef.current = false;
+      updateScrollInteraction();
     };
     const handleTouchStart = (event: TouchEvent) => {
       const touch = event.touches[0];
       if (!touch) {
         return;
       }
+      isTouchScrollActiveRef.current = true;
       lastTouchClientYRef.current = touch.clientY;
+      updateScrollInteraction();
     };
     const handleTouchMove = (event: TouchEvent) => {
       const touch = event.touches[0];
@@ -503,32 +507,56 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       }
       lastTouchClientYRef.current = touch.clientY;
     };
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      isTouchScrollActiveRef.current = touch !== undefined;
+      if (touch) {
+        lastTouchClientYRef.current = touch.clientY;
+        updateScrollInteraction();
+        return;
+      }
       lastTouchClientYRef.current = null;
+      updateScrollInteraction();
     };
 
     scrollContainer.addEventListener("scroll", handleDomScroll, { passive: true });
     scrollContainer.addEventListener("wheel", handleWheel, { passive: true });
     scrollContainer.addEventListener("pointerdown", handlePointerDown, { passive: true });
-    scrollContainer.addEventListener("pointerup", handlePointerUp, { passive: true });
-    scrollContainer.addEventListener("pointercancel", handlePointerUp, { passive: true });
     scrollContainer.addEventListener("touchstart", handleTouchStart, { passive: true });
     scrollContainer.addEventListener("touchmove", handleTouchMove, { passive: true });
-    scrollContainer.addEventListener("touchend", handleTouchEnd, { passive: true });
-    scrollContainer.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+    window.addEventListener("pointerup", handlePointerEnd, { capture: true, passive: true });
+    window.addEventListener("pointercancel", handlePointerEnd, { capture: true, passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { capture: true, passive: true });
+    window.addEventListener("touchcancel", handleTouchEnd, { capture: true, passive: true });
 
     return () => {
       scrollContainer.removeEventListener("scroll", handleDomScroll);
       scrollContainer.removeEventListener("wheel", handleWheel);
       scrollContainer.removeEventListener("pointerdown", handlePointerDown);
-      scrollContainer.removeEventListener("pointerup", handlePointerUp);
-      scrollContainer.removeEventListener("pointercancel", handlePointerUp);
       scrollContainer.removeEventListener("touchstart", handleTouchStart);
       scrollContainer.removeEventListener("touchmove", handleTouchMove);
-      scrollContainer.removeEventListener("touchend", handleTouchEnd);
-      scrollContainer.removeEventListener("touchcancel", handleTouchEnd);
+      window.removeEventListener("pointerup", handlePointerEnd, true);
+      window.removeEventListener("pointercancel", handlePointerEnd, true);
+      window.removeEventListener("touchend", handleTouchEnd, true);
+      window.removeEventListener("touchcancel", handleTouchEnd, true);
     };
-  }, [cancelPendingStickToBottom, evaluateHistoryStart, handleDomScroll, isLoadingOlderHistory]);
+  }, [
+    cancelPendingStickToBottom,
+    evaluateHistoryStart,
+    handleDomScroll,
+    isLoadingOlderHistory,
+    onScrollInteractionChange,
+    updateScrollInteraction,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      isPointerScrollActiveRef.current = false;
+      isTouchScrollActiveRef.current = false;
+      lastTouchClientYRef.current = null;
+      onScrollInteractionChange?.(false);
+    };
+  }, [onScrollInteractionChange]);
 
   const scrollToMessage = useStableEvent((messageId: string) => {
     // Jumping away hands the scroll position to the user; stop following output.
