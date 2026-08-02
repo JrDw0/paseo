@@ -5768,6 +5768,15 @@ function applyClaudeSessionEntryToAccumulator(
   if (entry.isSidechain) {
     return;
   }
+  // Claude Code writes the real session name to {"type":"ai-title","aiTitle":...} entries,
+  // which repeat through the file. Prefer it over falling back to the first prompt as the
+  // title, or the import list shows the prompt in the title slot too.
+  if (entry.type === "ai-title") {
+    if (typeof entry.aiTitle === "string" && entry.aiTitle.trim()) {
+      acc.title = entry.aiTitle.trim();
+    }
+    return;
+  }
   if (entry.type === "user" && isSyntheticUserEntry(entry)) {
     return;
   }
