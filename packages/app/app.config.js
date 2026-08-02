@@ -189,6 +189,15 @@ export default {
             kotlinVersion: "2.1.20",
             // Allow HTTP connections for local network hosts in release builds
             usesCleartextTraffic: true,
+            // R8 minification + resource shrinking shrink dead code and strip unused
+            // native libs/resources. Kept off for F-Droid: source-built Expo modules
+            // under -minify aren't validated in that profile.
+            ...(isFdroidBuild
+              ? {}
+              : {
+                  enableProguardInReleaseBuilds: true,
+                  enableShrinkResourcesInReleaseBuilds: true,
+                }),
           },
         },
       ],
