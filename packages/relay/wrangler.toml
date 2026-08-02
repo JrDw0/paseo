@@ -1,15 +1,23 @@
+# Self-hosted relay for Paseo.
+#
+# This deploys the legacy Cloudflare Durable Object relay to YOUR Cloudflare
+# account. It is NOT the production relay (that is the separate Elixir service
+# in getpaseo/paseo-relay); it is kept for self-hosting.
+#
+# Remove `account_id` below, or replace it with your own. Wrangler can also
+# fill it in automatically when you run `wrangler login`.
+#
+# There is intentionally no custom domain route here: without a custom domain
+# you get a free HTTPS endpoint at `https://paseo-relay.<you>.workers.dev`.
+# Add a `routes` entry only if you have a domain you control on Cloudflare.
+
 name = "paseo-relay"
-account_id = "10ed39a1dbf316e30abd0c409bed40d6"
+account_id = "7e9b26a6fb6d5aefa399935d0dbb654d"
 main = "src/cloudflare-adapter.ts"
 compatibility_date = "2024-12-01"
 
-routes = [{ pattern = "relay.paseo.sh", custom_domain = true }]
-
-[observability]
-enabled = true
-
-[vars]
-PASEO_RELAY_UPSTREAM = "https://paseo-relay-next.fly.dev"
+# NOTE: do NOT set PASEO_RELAY_UPSTREAM. That var makes the Worker proxy all
+# traffic to the original getpaseo relay, which defeats self-hosting.
 
 [[durable_objects.bindings]]
 name = "RELAY"
