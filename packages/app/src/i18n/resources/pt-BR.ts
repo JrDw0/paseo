@@ -913,6 +913,10 @@ export const ptBR: TranslationResources = {
     },
   },
   sidebar: {
+    filter: {
+      placeholder: "Filtrar espaços de trabalho",
+      noResults: "Nenhum espaço de trabalho corresponde ao filtro",
+    },
     pinned: {
       title: "Fixados",
     },

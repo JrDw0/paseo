@@ -883,6 +883,10 @@ export const zhCN: TranslationResources = {
     },
   },
   sidebar: {
+    filter: {
+      placeholder: "筛选 workspace",
+      noResults: "没有匹配的 workspace",
+    },
     pinned: {
       title: "已置顶",
     },

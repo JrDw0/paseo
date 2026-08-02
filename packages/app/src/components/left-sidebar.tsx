@@ -16,6 +16,7 @@ import {
   Pressable,
   StyleSheet as RNStyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
   type PressableStateCallbackType,
@@ -69,6 +70,10 @@ import type { ShortcutKey } from "@/utils/format-shortcut";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarImportRecentButton } from "./sidebar/sidebar-import-recent-button";
+import {
+  SidebarFilterTextProvider,
+  useSidebarFilterText,
+} from "./sidebar/sidebar-workspace-list-context";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
 
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
@@ -219,6 +224,8 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
   }, []);
 
   const newWorkspaceKeys = useShortcutKeys("new-workspace");
+  const [filterText, setFilterText] = useState("");
+  const filterTextContextValue = useMemo(() => ({ filterText, setFilterText }), [filterText]);
   const labels = useMemo(
     (): SidebarLabels => ({
       addProject: t("sidebar.actions.addProject"),
@@ -255,21 +262,23 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
 
   if (isCompactLayout) {
     return (
-      <RetainedPanelActivity active={active}>
-        <MobileSidebar
-          {...sharedProps}
-          insetsTop={insets.top}
-          insetsBottom={insets.bottom}
-          closeSidebar={showMobileAgent}
-          handleOpenProject={handleOpenProjectMobile}
-          handleHome={handleHomeMobile}
-          handleSettings={handleSettingsMobile}
-          handleAddHost={handleAddHostMobile}
-          handleOpenHostSettings={handleOpenHostSettingsMobile}
-          handleViewMoreNavigate={handleViewMoreNavigate}
-          handleViewSchedulesNavigate={handleViewSchedulesNavigate}
-        />
-      </RetainedPanelActivity>
+      <SidebarFilterTextProvider value={filterTextContextValue}>
+        <RetainedPanelActivity active={active}>
+          <MobileSidebar
+            {...sharedProps}
+            insetsTop={insets.top}
+            insetsBottom={insets.bottom}
+            closeSidebar={showMobileAgent}
+            handleOpenProject={handleOpenProjectMobile}
+            handleHome={handleHomeMobile}
+            handleSettings={handleSettingsMobile}
+            handleAddHost={handleAddHostMobile}
+            handleOpenHostSettings={handleOpenHostSettingsMobile}
+            handleViewMoreNavigate={handleViewMoreNavigate}
+            handleViewSchedulesNavigate={handleViewSchedulesNavigate}
+          />
+        </RetainedPanelActivity>
+      </SidebarFilterTextProvider>
     );
   }
 
@@ -909,8 +918,36 @@ function DesktopSidebar({
   );
 }
 
+function SidebarWorkspacesFilterInput() {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const filterContext = useSidebarFilterText();
+  if (!filterContext) {
+    return null;
+  }
+  return (
+    <View style={styles.workspacesFilterField}>
+      <Search size={12} color={theme.colors.foregroundMuted} />
+      <TextInput
+        value={filterContext.filterText}
+        onChangeText={filterContext.setFilterText}
+        placeholder={t("sidebar.filter.placeholder")}
+        placeholderTextColor={theme.colors.foregroundMuted}
+        accessibilityLabel={t("sidebar.filter.placeholder")}
+        testID="sidebar-workspace-filter-input"
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        clearButtonMode="while-editing"
+        style={styles.workspacesFilterInput}
+      />
+    </View>
+  );
+}
+
 function WorkspacesSectionHeader() {
   const { theme } = useUnistyles();
+  const isCompactLayout = useIsCompactFormFactor();
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
   const commandCenterKeys = useShortcutKeys("toggle-command-center");
   const handleSearchPress = useCallback(() => setCommandCenterOpen(true), [setCommandCenterOpen]);
@@ -926,29 +963,35 @@ function WorkspacesSectionHeader() {
     <View style={styles.workspacesSectionHeader}>
       <Text style={styles.workspacesSectionTitle}>Workspaces</Text>
       <View style={styles.workspacesSectionActions}>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open command center"
-              testID="sidebar-command-center-search"
-              style={searchButtonStyle}
-              onPress={handleSearchPress}
-            >
-              {({ hovered, pressed }) => (
-                <Search
-                  size={14}
-                  color={
-                    hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
-                  }
-                />
-              )}
-            </Pressable>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" align="center" offset={8}>
-            <IconTooltipContent label="Search" shortcutKeys={commandCenterKeys} />
-          </TooltipContent>
-        </Tooltip>
+        {isCompactLayout ? (
+          // On compact screens the magnifier grows into an inline filter; the
+          // command center stays one shortcut away from the docked search icon.
+          <SidebarWorkspacesFilterInput />
+        ) : (
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open command center"
+                testID="sidebar-command-center-search"
+                style={searchButtonStyle}
+                onPress={handleSearchPress}
+              >
+                {({ hovered, pressed }) => (
+                  <Search
+                    size={14}
+                    color={
+                      hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
+                    }
+                  />
+                )}
+              </Pressable>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" offset={8}>
+              <IconTooltipContent label="Search" shortcutKeys={commandCenterKeys} />
+            </TooltipContent>
+          </Tooltip>
+        )}
         <SidebarImportRecentButton />
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
@@ -1014,6 +1057,27 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  workspacesFilterField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    flex: 1,
+    maxWidth: 220,
+    height: 28,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  workspacesFilterInput: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.xs,
   },
   workspacesHeaderIconButton: {
     width: 28,

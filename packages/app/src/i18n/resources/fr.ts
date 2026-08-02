@@ -921,6 +921,10 @@ export const fr: TranslationResources = {
     },
   },
   sidebar: {
+    filter: {
+      placeholder: "Filtrer les espaces de travail",
+      noResults: "Aucun espace de travail ne correspond",
+    },
     pinned: {
       title: "Épinglés",
     },

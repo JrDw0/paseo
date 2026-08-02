@@ -901,6 +901,10 @@ export const en = {
     },
   },
   sidebar: {
+    filter: {
+      placeholder: "Filter workspaces",
+      noResults: "No workspaces match",
+    },
     pinned: {
       title: "Pinned",
     },

@@ -913,6 +913,10 @@ export const ru: TranslationResources = {
     },
   },
   sidebar: {
+    filter: {
+      placeholder: "Фильтровать рабочие области",
+      noResults: "Нет подходящих рабочих областей",
+    },
     pinned: {
       title: "Закреплённые",
     },

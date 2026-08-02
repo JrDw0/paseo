@@ -891,6 +891,10 @@ export const ar: TranslationResources = {
     },
   },
   sidebar: {
+    filter: {
+      placeholder: "تصفية مساحات العمل",
+      noResults: "لا توجد مساحات عمل مطابقة",
+    },
     pinned: {
       title: "المثبتة",
     },

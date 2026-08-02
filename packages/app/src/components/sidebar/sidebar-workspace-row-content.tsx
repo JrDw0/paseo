@@ -27,6 +27,9 @@ import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { openExternalUrl } from "@/utils/open-external-url";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
+import { useSidebarRowAgentMeta } from "@/components/sidebar/sidebar-workspace-list-context";
+import { getProviderIcon } from "@/components/provider-icons";
+import { formatTimeAgo } from "@/utils/time";
 
 const DEFAULT_STATUS_DOT_SIZE = 7;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
@@ -123,7 +126,12 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   const {
     settings: { workspaceTitleSource },
   } = useAppSettings();
-  const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({ workspace, workspaceTitleSource });
+  const agentMeta = useSidebarRowAgentMeta(workspace.serverId, workspace.workspaceId);
+  const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({
+    workspace,
+    workspaceTitleSource,
+    agentTitle: agentMeta?.agentTitle ?? null,
+  });
   const workspaceBranchTextStyle = useMemo(
     () => [
       styles.workspaceBranchText,
@@ -146,12 +154,16 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
         <View style={styles.workspaceContentColumn}>
           <View style={styles.workspaceTitleRow}>
             <View style={styles.workspaceTitleLeft}>
+              <WorkspaceProviderIcon meta={agentMeta} />
               <Text style={workspaceBranchTextStyle} numberOfLines={1}>
                 {workspaceLabel}
               </Text>
               {scriptIconKind ? <WorkspaceScriptIcon kind={scriptIconKind} /> : null}
             </View>
-            <View style={sidebarWorkspaceRowStyles.rowRight}>{children}</View>
+            <View style={[sidebarWorkspaceRowStyles.rowRight, styles.workspaceTitleRowRight]}>
+              <WorkspaceAgentActivity meta={agentMeta} />
+              {children}
+            </View>
           </View>
           {subtitle ? (
             <View style={styles.workspaceSubtitleRow}>
@@ -184,6 +196,25 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     </View>
   );
 });
+
+function WorkspaceProviderIcon({ meta }: { meta: ReturnType<typeof useSidebarRowAgentMeta> }) {
+  if (!meta?.provider) {
+    return null;
+  }
+  const Icon = getProviderIcon(meta.provider);
+  return <Icon size={12} color={styles.workspaceProviderIcon.color} />;
+}
+
+function WorkspaceAgentActivity({ meta }: { meta: ReturnType<typeof useSidebarRowAgentMeta> }) {
+  if (!meta) {
+    return null;
+  }
+  return (
+    <Text style={styles.workspaceAgentActivity} numberOfLines={1}>
+      {formatTimeAgo(meta.lastActivityAt)}
+    </Text>
+  );
+}
 
 function WorkspaceScriptIcon({ kind }: { kind: SidebarWorkspaceScriptIconKind }) {
   return (
@@ -531,6 +562,18 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     flex: 1,
     minWidth: 0,
+  },
+  workspaceTitleRowRight: {
+    alignItems: "center",
+  },
+  workspaceProviderIcon: {
+    color: theme.colors.foregroundMuted,
+  },
+  workspaceAgentActivity: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 20,
+    flexShrink: 0,
   },
   shortcutBadgeOverlay: {
     position: "absolute",

@@ -922,6 +922,10 @@ export const es: TranslationResources = {
     },
   },
   sidebar: {
+    filter: {
+      placeholder: "Filtrar espacios de trabajo",
+      noResults: "Ningún espacio de trabajo coincide",
+    },
     pinned: {
       title: "Anclados",
     },

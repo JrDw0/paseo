@@ -902,6 +902,10 @@ export const ja: TranslationResources = {
     },
   },
   sidebar: {
+    filter: {
+      placeholder: "ワークスペースを絞り込む",
+      noResults: "一致するワークスペースがありません",
+    },
     pinned: {
       title: "固定済み",
     },
