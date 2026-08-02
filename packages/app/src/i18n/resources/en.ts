@@ -185,6 +185,14 @@ export const en = {
   agentStream: {
     empty: "Start chatting with this agent...",
     scrollToBottom: "Scroll to bottom",
+    messageJump: {
+      button: "Jump to a message",
+      title: "Your messages",
+      empty: "No messages yet",
+      imageMessage: "(Image)",
+      attachmentMessage: "(Attachment)",
+      close: "Close",
+    },
     permission: {
       plan: "Plan",
       required: "Permission Required",

@@ -187,6 +187,14 @@ export const ar: TranslationResources = {
   agentStream: {
     empty: "ابدأ الدردشة مع هذا الوكيل...",
     scrollToBottom: "قم بالتمرير إلى الأسفل",
+    messageJump: {
+      button: "الانتقال إلى رسالة",
+      title: "رسائلك",
+      empty: "لا توجد رسائل بعد",
+      imageMessage: "(صورة)",
+      attachmentMessage: "(مرفق)",
+      close: "إغلاق",
+    },
     permission: {
       plan: "يخطط",
       required: "الإذن مطلوب",

@@ -187,6 +187,14 @@ export const es: TranslationResources = {
   agentStream: {
     empty: "Comience a chatear con este agente...",
     scrollToBottom: "Desplazarse hacia abajo",
+    messageJump: {
+      button: "Ir a un mensaje",
+      title: "Tus mensajes",
+      empty: "Aún no hay mensajes",
+      imageMessage: "(Imagen)",
+      attachmentMessage: "(Adjunto)",
+      close: "Cerrar",
+    },
     permission: {
       plan: "Plan",
       required: "Permiso requerido",

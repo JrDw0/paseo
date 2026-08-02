@@ -187,6 +187,14 @@ export const ja: TranslationResources = {
   agentStream: {
     empty: "このエージェントとチャットを始めましょう...",
     scrollToBottom: "下にスクロール",
+    messageJump: {
+      button: "メッセージへ移動",
+      title: "自分のメッセージ",
+      empty: "まだメッセージがありません",
+      imageMessage: "（画像）",
+      attachmentMessage: "（添付ファイル）",
+      close: "閉じる",
+    },
     permission: {
       plan: "プラン",
       required: "権限が必要です",
