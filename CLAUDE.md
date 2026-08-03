@@ -112,6 +112,7 @@ See [docs/development.md](docs/development.md) for full setup, build sync requir
   - Never re-run a test suite that another agent already ran and reported green — trust the result.
   - For full suite verification, push to CI and check GitHub Actions instead.
 - **Always run typecheck and lint after every change.**
+- **Android Gradle cache:** use the machine's default Gradle user home (`/Users/jrd/.gradle` on this checkout's Mac). Do not set `GRADLE_USER_HOME` to a checkout-local directory for Android builds; see [docs/android.md](docs/android.md#gradle-cache) for the release build command.
 - **Build workspace packages before diagnosing cross-package type errors.** This repo consumes generated declarations across workspaces. If typecheck fails in a package that depends on another workspace, rebuild the owning stack first so `dist` declarations are current:
   - `npm run build:client` — rebuild protocol and client declarations.
   - `npm run build:server` — rebuild highlight, relay, protocol, client, server, and CLI when server/CLI types may be stale.

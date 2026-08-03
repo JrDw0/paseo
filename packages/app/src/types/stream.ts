@@ -87,6 +87,7 @@ export interface UserMessageItem {
   kind: "user_message";
   id: string;
   clientMessageId?: string;
+  timelineCursor?: TimelinePosition;
   text: string;
   timestamp: Date;
   optimistic?: true;
@@ -240,6 +241,7 @@ function markThoughtReady(item: ThoughtItem): ThoughtItem {
 function buildUserMessageItem(input: {
   id: string;
   clientMessageId?: string;
+  timelineCursor?: TimelinePosition;
   text: string;
   timestamp: Date;
   optimistic?: UserMessageItem | null;
@@ -249,6 +251,7 @@ function buildUserMessageItem(input: {
       kind: "user_message",
       id: input.id,
       ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
+      ...(input.timelineCursor ? { timelineCursor: input.timelineCursor } : {}),
       text: input.optimistic.text,
       timestamp: input.optimistic.timestamp,
       ...(input.optimistic.images && input.optimistic.images.length > 0
@@ -264,6 +267,7 @@ function buildUserMessageItem(input: {
     kind: "user_message",
     id: input.id,
     ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
+    ...(input.timelineCursor ? { timelineCursor: input.timelineCursor } : {}),
     text: input.text,
     timestamp: input.timestamp,
   };
@@ -357,6 +361,7 @@ function appendUserMessage(
   source: StreamUpdateSource,
   messageId?: string,
   clientMessageId?: string,
+  timelineCursor?: TimelinePosition,
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
   if (!hasContent) {
@@ -378,6 +383,7 @@ function appendUserMessage(
   const nextItem = buildUserMessageItem({
     id: entryId,
     clientMessageId,
+    timelineCursor,
     text: chunk,
     timestamp,
     optimistic,
@@ -853,6 +859,7 @@ function reduceTimelineEvent(
           source,
           item.messageId,
           item.clientMessageId,
+          timelineCursor,
         ),
       );
     case "assistant_message":

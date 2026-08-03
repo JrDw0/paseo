@@ -10,6 +10,7 @@ import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
  */
 export interface JumpIndexEntry {
   id: string;
+  epoch: string;
   seq: number;
   preview: string;
   timestampLabel: string;
@@ -23,10 +24,11 @@ interface JumpIndexTimelineEntry {
 
 export function buildJumpIndexFromTimeline(input: {
   entries: JumpIndexTimelineEntry[];
+  epoch: string;
   formatTimestamp: (iso: string) => string;
   imageMessagePreview: string;
 }): JumpIndexEntry[] {
-  const { entries, formatTimestamp, imageMessagePreview } = input;
+  const { entries, epoch, formatTimestamp, imageMessagePreview } = input;
   const index: JumpIndexEntry[] = [];
 
   for (const entry of entries) {
@@ -39,6 +41,7 @@ export function buildJumpIndexFromTimeline(input: {
       .find((line) => line.length > 0);
     index.push({
       id: entry.item.messageId ?? `seq:${entry.seqStart}`,
+      epoch,
       seq: entry.seqStart,
       preview: firstLine ?? imageMessagePreview,
       timestampLabel: formatTimestamp(entry.timestamp),

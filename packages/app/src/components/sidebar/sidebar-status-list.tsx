@@ -45,6 +45,7 @@ import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header"
 import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
+import { shouldShowSidebarWorkspaceDiffStat } from "@/components/sidebar/sidebar-workspace-row-layout";
 
 // Themed icon wrappers
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -703,7 +704,11 @@ function StatusWorkspaceRowInner({
         const showShortcut = showShortcutBadge && shortcutNumber !== null;
         const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
         const showKebabInSlot = showKebab && !showShortcut;
-        const shouldRenderActionSlot = Boolean(onArchive || workspace.diffStat);
+        const showDiffStat = shouldShowSidebarWorkspaceDiffStat({
+          hasDiffStat: Boolean(workspace.diffStat),
+          isTouchPlatform,
+        });
+        const shouldRenderActionSlot = Boolean(onArchive || showDiffStat);
         const workspaceRowStyle = getStatusWorkspaceRowStyle({ selected, isHovered });
         return (
           <View style={styles.workspaceRowContainer} {...hoverHandlers}>
@@ -730,7 +735,7 @@ function StatusWorkspaceRowInner({
                 {shouldRenderActionSlot ? (
                   <StatusWorkspaceActionSlot
                     workspace={workspace}
-                    showBase={Boolean(workspace.diffStat && !showKebabInSlot && !showShortcut)}
+                    showBase={showDiffStat && !showKebabInSlot && !showShortcut}
                     showKebab={showKebabInSlot}
                     isPinned={isPinned}
                     onTogglePin={onTogglePin}

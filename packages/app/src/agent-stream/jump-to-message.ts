@@ -10,7 +10,8 @@ export const MESSAGE_JUMP_RETRY_DELAY_MS = 350;
 
 export type MessageJumpPlan =
   | { kind: "scroll-to-index"; index: number }
-  | { kind: "scroll-to-bottom" };
+  | { kind: "scroll-to-bottom" }
+  | { kind: "missing" };
 
 /**
  * Messages present in the loaded history rows navigate by data index. Live-head
@@ -19,10 +20,14 @@ export type MessageJumpPlan =
  */
 export function planMessageJump(
   rowIdToDataIndex: ReadonlyMap<string, number>,
+  liveHeadIds: ReadonlySet<string>,
   messageId: string,
 ): MessageJumpPlan {
   const index = rowIdToDataIndex.get(messageId);
-  return index === undefined ? { kind: "scroll-to-bottom" } : { kind: "scroll-to-index", index };
+  if (index !== undefined) {
+    return { kind: "scroll-to-index", index };
+  }
+  return liveHeadIds.has(messageId) ? { kind: "scroll-to-bottom" } : { kind: "missing" };
 }
 
 export interface PendingMessageJump {

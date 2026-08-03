@@ -59,6 +59,25 @@ Gradle auto-fetches the platform/build-tools it needs once licenses are accepted
 
 ## Local build + install
 
+### Gradle cache
+
+Use Gradle's default user home so builds share the existing wrapper, dependency, transform, and native build caches. Do not set `GRADLE_USER_HOME` to `.gradle-local` or another checkout-local directory; that creates a second cache and can add several gigabytes to the worktree.
+
+For a production arm64 APK on the connected device, run from `packages/app/android` without setting `GRADLE_USER_HOME`:
+
+```bash
+APP_VARIANT=production \
+ANDROID_HOME=/Users/jrd/Library/Android/sdk \
+ANDROID_SDK_ROOT=/Users/jrd/Library/Android/sdk \
+bash ./gradlew :app:assembleRelease -x lint \
+  -PreactNativeArchitectures=arm64-v8a \
+  --no-daemon --max-workers=4 -Dorg.gradle.parallel=false
+
+adb -s <device-serial> install -r app/build/outputs/apk/release/app-release.apk
+```
+
+Check for an existing `assembleRelease` process before starting another build. The APK path is relative to `packages/app/android`.
+
 From repo root:
 
 ```bash

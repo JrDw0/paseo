@@ -62,7 +62,7 @@ describe("resolveNavigateToAgent", () => {
     ]);
   });
 
-  it("uses the input workspaceId without reading the nav target", () => {
+  it("uses the input workspaceId when the agent is not yet in the session store", () => {
     const readTargets: { serverId: string; agentId: string }[] = [];
     const { deps, tabNavigations } = createFakeNavigators({ agentWorkspaceId: null });
     deps.readAgentNavTarget = (input) => {
@@ -75,11 +75,31 @@ describe("resolveNavigateToAgent", () => {
       deps,
     );
 
-    expect(readTargets).toEqual([]);
+    expect(readTargets).toEqual([{ serverId: SERVER_ID, agentId: AGENT_ID }]);
     expect(tabNavigations).toEqual([
       {
         serverId: SERVER_ID,
         workspaceId: WORKSPACE_ID,
+        target: { kind: "agent", agentId: AGENT_ID },
+        pin: undefined,
+      },
+    ]);
+  });
+
+  it("prefers the current session workspace over a stale history snapshot", () => {
+    const { deps, tabNavigations } = createFakeNavigators({
+      agentWorkspaceId: "workspace-current",
+    });
+
+    resolveNavigateToAgent(
+      { serverId: SERVER_ID, agentId: AGENT_ID, workspaceId: "workspace-stale" },
+      deps,
+    );
+
+    expect(tabNavigations).toEqual([
+      {
+        serverId: SERVER_ID,
+        workspaceId: "workspace-current",
         target: { kind: "agent", agentId: AGENT_ID },
         pin: undefined,
       },

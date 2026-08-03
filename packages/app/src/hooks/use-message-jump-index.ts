@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { FetchAgentTimelinePayload } from "@getpaseo/client/internal/daemon-client";
 import { useSessionStore } from "@/stores/session-store";
-import { fetchAgentTimelineOnce } from "@/timeline/fetch-agent-timeline-once";
-import { planTimelineFullIndexFetch } from "@/timeline/timeline-sync-plan";
+import { fetchMessageJumpTimeline } from "@/timeline/message-jump-timeline-request";
 import { loadStoredJumpIndex, saveStoredJumpIndex } from "@/timeline/message-jump-index-cache";
 import { buildJumpIndexFromTimeline, type JumpIndexEntry } from "@/timeline/jump-index";
 import { formatTimeAgo } from "@/utils/time";
@@ -31,38 +29,59 @@ export function useMessageJumpIndex({
   const [entries, setEntries] = useState<JumpIndexEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
-
   const agentKey = `${serverId}:${agentId}`;
+  const activeAgentKey = useRef(agentKey);
+  const latestRefresh = useRef(0);
+  const committedNetworkResult = useRef(0);
+
+  activeAgentKey.current = agentKey;
+
+  useEffect(() => {
+    setEntries(null);
+    setError(null);
+    latestRefresh.current += 1;
+    committedNetworkResult.current = 0;
+  }, [agentKey]);
 
   const refresh = useCallback(async () => {
     const client = useSessionStore.getState().sessions[serverId]?.client;
     if (!client) {
       return null;
     }
+    const refreshId = latestRefresh.current + 1;
+    latestRefresh.current = refreshId;
+    if (mounted.current && activeAgentKey.current === agentKey) {
+      setError(null);
+    }
     try {
-      const payload: FetchAgentTimelinePayload = await fetchAgentTimelineOnce(
-        client,
-        agentId,
-        planTimelineFullIndexFetch(),
-      );
+      const payload = await fetchMessageJumpTimeline(client, agentId);
       if (payload.error) {
         throw new Error(payload.error);
       }
       const built = buildJumpIndexFromTimeline({
         entries: payload.entries,
+        epoch: payload.epoch,
         formatTimestamp: (iso) => formatTimeAgo(new Date(iso)),
         imageMessagePreview: t("agentStream.messageJump.imageMessage"),
       });
-      if (mounted.current) {
+      if (
+        mounted.current &&
+        activeAgentKey.current === agentKey &&
+        latestRefresh.current === refreshId
+      ) {
+        committedNetworkResult.current += 1;
         setEntries(built);
         setError(null);
       }
       void saveStoredJumpIndex(AsyncStorage, agentKey, built);
       return built;
     } catch (e: unknown) {
-      if (mounted.current) {
+      if (
+        mounted.current &&
+        activeAgentKey.current === agentKey &&
+        latestRefresh.current === refreshId
+      ) {
         setError(e instanceof Error ? e.message : String(e));
-        setEntries((prev) => prev ?? []);
       }
       return null;
     }
@@ -75,8 +94,15 @@ export function useMessageJumpIndex({
       return;
     }
     let cancelled = false;
+    const networkResultAtLoadStart = committedNetworkResult.current;
     void loadStoredJumpIndex(AsyncStorage, agentKey).then((cached) => {
-      if (cancelled || !cached || cached.length === 0) {
+      if (
+        cancelled ||
+        activeAgentKey.current !== agentKey ||
+        committedNetworkResult.current !== networkResultAtLoadStart ||
+        !cached ||
+        cached.length === 0
+      ) {
         return cached;
       }
       setEntries(cached);
@@ -91,7 +117,7 @@ export function useMessageJumpIndex({
   }, [session?.client, enabled, agentId, serverId, agentKey]);
 
   return useMemo(
-    () => ({ entries, error, refresh, ready: entries !== null }),
+    () => ({ entries, error, refresh, ready: entries !== null || error !== null }),
     [entries, error, refresh],
   );
 }

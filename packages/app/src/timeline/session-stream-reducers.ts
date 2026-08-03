@@ -117,6 +117,21 @@ interface TimelinePathResult {
   sideEffects: TimelineReducerSideEffect[];
 }
 
+function timelinePositionForUnit(input: {
+  event: AgentStreamEventPayload;
+  epoch: string;
+  seqStart: number;
+  seqEnd: number;
+}): { epoch: string; seq: number } {
+  const { event, epoch, seqStart, seqEnd } = input;
+  return {
+    epoch,
+    // User-message jump indexes identify the projected row by its start seq.
+    // Other timeline rows preserve the existing end-seq cursor convention.
+    seq: event.type === "timeline" && event.item.type === "user_message" ? seqStart : seqEnd,
+  };
+}
+
 function classifySessionTimelineSeq({
   cursor,
   epoch,
@@ -746,8 +761,13 @@ function applyCanonicalForwardUnit(params: {
   unit: TimelineUnit;
   epoch: string;
 }): { tail: StreamItem[]; head: StreamItem[] } {
-  const { event, timestamp, seqEnd } = params.unit;
-  const timelineCursor = { epoch: params.epoch, seq: seqEnd };
+  const { event, timestamp, seq, seqEnd } = params.unit;
+  const timelineCursor = timelinePositionForUnit({
+    event,
+    epoch: params.epoch,
+    seqStart: seq,
+    seqEnd,
+  });
   if (params.head.length === 0) {
     return {
       tail: reduceStreamUpdate(params.tail, event, timestamp, {
@@ -856,10 +876,15 @@ function applyTimelineIncrementalPath(args: {
   if (acceptedUnits.length > 0) {
     if (payload.direction === "before") {
       const olderTail = hydrateStreamState(
-        acceptedUnits.map(({ event, timestamp, seqEnd }) => ({
+        acceptedUnits.map(({ event, timestamp, seq, seqEnd }) => ({
           event,
           timestamp,
-          timelineCursor: { epoch: payload.epoch, seq: seqEnd },
+          timelineCursor: timelinePositionForUnit({
+            event,
+            epoch: payload.epoch,
+            seqStart: seq,
+            seqEnd,
+          }),
         })),
         { source: "canonical" },
       );
@@ -949,10 +974,15 @@ export function processTimelineResponse(
     timestamp: Date;
     timelineCursor: { epoch: string; seq: number };
   }> =>
-    units.map(({ event, timestamp, seqEnd }) => ({
+    units.map(({ event, timestamp, seq, seqEnd }) => ({
       event,
       timestamp,
-      timelineCursor: { epoch: payload.epoch, seq: seqEnd },
+      timelineCursor: timelinePositionForUnit({
+        event,
+        epoch: payload.epoch,
+        seqStart: seq,
+        seqEnd,
+      }),
     }));
 
   // ------------------------------------------------------------------

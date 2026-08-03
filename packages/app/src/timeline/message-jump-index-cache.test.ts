@@ -21,7 +21,7 @@ function makeStore(): JumpIndexStorage & {
 }
 
 function entry(seq: number, id = `msg-${seq}`): JumpIndexEntry {
-  return { id, seq, preview: `preview ${seq}`, timestampLabel: "now" };
+  return { id, epoch: "epoch-1", seq, preview: `preview ${seq}`, timestampLabel: "now" };
 }
 
 describe("message-jump-index-cache", () => {

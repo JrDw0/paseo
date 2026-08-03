@@ -12,7 +12,7 @@ export interface JumpIndexStorage {
 }
 
 const STORAGE_KEY = "@paseo:message-jump-index";
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const MAX_AGENTS = 64;
 const MAX_ENTRIES_PER_AGENT = 2000;
 

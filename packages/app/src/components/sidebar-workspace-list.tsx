@@ -123,6 +123,7 @@ import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-ar
 import { openExternalUrl } from "@/utils/open-external-url";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 import { useWorkspaceArchive } from "@/workspace/use-workspace-archive";
+import { shouldShowSidebarWorkspaceDiffStat } from "@/components/sidebar/sidebar-workspace-row-layout";
 import {
   getCurrentProjectRemoveReadiness,
   removeProjectFromHosts,
@@ -693,7 +694,11 @@ function WorkspaceRowRightGroup({
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
   const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
   const showKebabInSlot = showKebab && !showShortcut;
-  const shouldRenderActionSlot = Boolean(onArchive || workspace.diffStat);
+  const showDiffStat = shouldShowSidebarWorkspaceDiffStat({
+    hasDiffStat: Boolean(workspace.diffStat),
+    isTouchPlatform,
+  });
+  const shouldRenderActionSlot = Boolean(onArchive || showDiffStat);
 
   return (
     <>
@@ -703,9 +708,9 @@ function WorkspaceRowRightGroup({
       {shouldRenderActionSlot ? (
         <SidebarWorkspaceTrailingActionSlot>
           <SidebarWorkspaceTrailingActionBase
-            visible={Boolean(workspace.diffStat && !showKebabInSlot && !showShortcut)}
+            visible={showDiffStat && !showKebabInSlot && !showShortcut}
           >
-            {workspace.diffStat ? (
+            {showDiffStat && workspace.diffStat ? (
               <DiffStat
                 additions={workspace.diffStat.additions}
                 deletions={workspace.diffStat.deletions}

@@ -13,16 +13,21 @@ describe("planMessageJump", () => {
       ["middle", 1],
       ["oldest", 2],
     ]);
-    expect(planMessageJump(rows, "middle")).toEqual({ kind: "scroll-to-index", index: 1 });
+    expect(planMessageJump(rows, new Set(), "middle")).toEqual({
+      kind: "scroll-to-index",
+      index: 1,
+    });
   });
 
   it("anchors to the bottom for messages outside the history rows (live head)", () => {
     const rows = new Map([["newest", 0]]);
-    expect(planMessageJump(rows, "live-head-message")).toEqual({ kind: "scroll-to-bottom" });
+    expect(planMessageJump(rows, new Set(["live-head-message"]), "live-head-message")).toEqual({
+      kind: "scroll-to-bottom",
+    });
   });
 
-  it("anchors to the bottom when there are no history rows at all", () => {
-    expect(planMessageJump(new Map(), "anything")).toEqual({ kind: "scroll-to-bottom" });
+  it("does not move when the target is absent from both history and live head", () => {
+    expect(planMessageJump(new Map(), new Set(), "anything")).toEqual({ kind: "missing" });
   });
 });
 

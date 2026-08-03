@@ -13,6 +13,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import type { Theme } from "@/styles/theme";
 import { estimateStreamItemHeight } from "./web-virtualization";
+import { DESKTOP_FLOATING_ACTIONS_CLEARANCE } from "./floating-actions-layout";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
 import { createStreamStrategy } from "./strategy";
 import {
@@ -576,8 +577,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       node.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    // Target could not be located (or was unmounted mid-frame); settle at the bottom edge.
-    scrollMessagesToBottom("smooth");
+    if (segments.liveHead.some((item) => item.id === messageId)) {
+      scrollMessagesToBottom("smooth");
+    }
   });
 
   useEffect(() => {
@@ -619,8 +621,11 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       minHeight: "100%",
       paddingTop: 16,
       paddingBottom: 16,
-      paddingLeft: isMobileBreakpoint ? 8 : 16,
-      paddingRight: isMobileBreakpoint ? 8 : 16,
+      // The desktop action stack is overlaid at the trailing edge. Mirror its
+      // clearance on both sides so narrower panes keep messages centered and
+      // leave the controls outside the message rail.
+      paddingLeft: isMobileBreakpoint ? 8 : DESKTOP_FLOATING_ACTIONS_CLEARANCE,
+      paddingRight: isMobileBreakpoint ? 8 : DESKTOP_FLOATING_ACTIONS_CLEARANCE,
       boxSizing: "border-box",
     };
   }, [isMobileBreakpoint]);

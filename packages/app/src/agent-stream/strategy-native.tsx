@@ -166,6 +166,10 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     }
     return indexById;
   }, [historyRows]);
+  const liveHeadIds = useMemo(
+    () => new Set(segments.liveHead.map((item) => item.id)),
+    [segments.liveHead],
+  );
   const pendingMessageJumpRef = useRef<PendingMessageJump | null>(null);
   const messageJumpTokenRef = useRef(0);
   const messageJumpRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -278,7 +282,11 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
 
   const scrollToMessage = useStableEvent((messageId: string) => {
     clearMessageJumpRetryTimeout();
-    const plan = planMessageJump(historyRowIndexById, messageId);
+    const plan = planMessageJump(historyRowIndexById, liveHeadIds, messageId);
+    if (plan.kind === "missing") {
+      pendingMessageJumpRef.current = null;
+      return;
+    }
     if (plan.kind === "scroll-to-bottom") {
       // Live-head rows render adjacent to the bottom edge; reuse the bottom anchor.
       pendingMessageJumpRef.current = null;

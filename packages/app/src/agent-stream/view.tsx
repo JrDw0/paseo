@@ -18,6 +18,7 @@ import {
   Text,
   Pressable,
   Platform,
+  type LayoutChangeEvent,
   type PressableStateCallbackType,
   type StyleProp,
   type ViewStyle,
@@ -67,8 +68,9 @@ import { MessageJumpSheet, type MessageJumpEntry } from "@/components/message-ju
 import { formatTimeAgo } from "@/utils/time";
 import { useMessageJumpIndex } from "@/hooks/use-message-jump-index";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
-import { decideMessageJump } from "./jump-decision";
+import { decideMessageJump, findLoadedMessageJumpTarget } from "./jump-decision";
 import { driveJumpBackfill } from "./jump-backfill";
+import { resolveFloatingActionsRight } from "./floating-actions-layout";
 import {
   prepareToolCallHistory,
   projectToolCallDetailLevel,
@@ -341,6 +343,7 @@ function buildLoadedFallbackJumpEntries(
     }
     entries.push({
       id: item.id,
+      epoch: "",
       seq: -1,
       preview,
       timestampLabel: formatTimestamp(item.timestamp),
@@ -822,14 +825,33 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     }, []);
 
     const [isMessageJumpSheetOpen, setIsMessageJumpSheetOpen] = useState(false);
+    const [pendingMessageJump, setPendingMessageJump] = useState<MessageJumpEntry | null>(null);
+    const [streamContainerWidth, setStreamContainerWidth] = useState<number | null>(null);
 
     const openMessageJumpSheet = useCallback(() => setIsMessageJumpSheetOpen(true), []);
     const closeMessageJumpSheet = useCallback(() => setIsMessageJumpSheetOpen(false), []);
+    const handleStreamContainerLayout = useCallback((event: LayoutChangeEvent) => {
+      const nextWidth = event.nativeEvent.layout.width;
+      setStreamContainerWidth((current) => (current === nextWidth ? current : nextWidth));
+    }, []);
+    const floatingActionsStyle = useMemo(
+      () => ({
+        right: resolveFloatingActionsRight({
+          containerWidth: streamContainerWidth,
+          isCompact: isMobile,
+        }),
+      }),
+      [isMobile, streamContainerWidth],
+    );
 
     // Jump list is built from the cached full index when the sheet is open, falling
     // back to the projected tail so the button is still meaningful before the
     // index loads.
-    const { entries: indexEntries, ready: indexReady } = useMessageJumpIndex({
+    const {
+      entries: indexEntries,
+      ready: indexReady,
+      refresh: refreshMessageJumpIndex,
+    } = useMessageJumpIndex({
       serverId: resolvedServerId,
       agentId,
       enabled: isMessageJumpSheetOpen,
@@ -847,6 +869,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           seenIndex.add(entry.id);
           entries.push({
             id: entry.id,
+            epoch: entry.epoch,
             seq: entry.seq,
             preview: entry.preview,
             timestampLabel: entry.timestampLabel,
@@ -866,49 +889,73 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       );
     }, [indexEntries, projectedToolCalls.head, projectedToolCalls.tail, t]);
 
+    const renderedStreamItems = useMemo(
+      () => [
+        ...streamLayout.history.map((layoutItem) => layoutItem.item),
+        ...streamLayout.liveHead.map((layoutItem) => layoutItem.item),
+      ],
+      [streamLayout.history, streamLayout.liveHead],
+    );
+
+    useEffect(() => {
+      if (!pendingMessageJump) {
+        return;
+      }
+      const targetId = findLoadedMessageJumpTarget(renderedStreamItems, pendingMessageJump);
+      if (!targetId) {
+        return;
+      }
+      const frame = requestAnimationFrame(() => {
+        viewportRef.current?.scrollToMessage(targetId);
+        setPendingMessageJump(null);
+      });
+      return () => cancelAnimationFrame(frame);
+    }, [pendingMessageJump, renderedStreamItems]);
+
     const handleJumpToMessage = useCallback(
       (entry: MessageJumpEntry) => {
-        setIsMessageJumpSheetOpen(false);
         // Fallback rows (index not yet loaded) lack a usable seq but are by
         // definition already rendered, so always scroll them.
         if (entry.seq <= 0) {
+          setIsMessageJumpSheetOpen(false);
           viewportRef.current?.scrollToMessage(entry.id);
           return;
         }
+        const timelineCursor = useSessionStore
+          .getState()
+          .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
+        if (entry.epoch && timelineCursor && entry.epoch !== timelineCursor.epoch) {
+          void refreshMessageJumpIndex();
+          return;
+        }
+        setIsMessageJumpSheetOpen(false);
         const decision = decideMessageJump(entry, {
-          isSeqCovered: (seq) => {
-            const cursor = useSessionStore
-              .getState()
-              .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
-            if (!cursor) {
-              return false;
-            }
-            return seq >= cursor.startSeq && seq <= cursor.endSeq;
-          },
+          isSeqCovered: () => Boolean(findLoadedMessageJumpTarget(renderedStreamItems, entry)),
         });
         if (decision.kind === "scroll") {
-          viewportRef.current?.scrollToMessage(entry.id);
+          setPendingMessageJump(entry);
           return;
         }
         // Target row not yet loaded: page the stream back until it is, then scroll.
-        const scroll = () => viewportRef.current?.scrollToMessage(entry.id);
         void driveJumpBackfill({
           targetSeq: entry.seq,
           readStartSeq: () => {
-            const cursor = useSessionStore
+            const currentCursor = useSessionStore
               .getState()
               .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
-            return cursor?.startSeq ?? Number.POSITIVE_INFINITY;
+            return currentCursor?.startSeq ?? Number.POSITIVE_INFINITY;
           },
           readEpoch: () =>
             useSessionStore.getState().sessions[resolvedServerId]?.agentTimelineCursor.get(agentId)
-              ?.epoch ?? "",
+              ?.epoch ?? entry.epoch,
           fetchPage: (request) =>
             getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, request),
-          onCovered: scroll,
-        }).catch(() => scroll());
+          onCovered: () => setPendingMessageJump(entry),
+        }).catch((error) => {
+          console.warn("[Timeline] failed to backfill message jump target", error);
+        });
       },
-      [agentId, resolvedServerId],
+      [agentId, refreshMessageJumpIndex, renderedStreamItems, resolvedServerId],
     );
 
     const setInlineDetailsExpanded = useCallback(
@@ -1306,7 +1353,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     return (
       <ToolCallSheetProvider>
-        <View style={stylesheet.container}>
+        <View style={stylesheet.container} onLayout={handleStreamContainerLayout}>
           <MessageOuterSpacingProvider disableOuterSpacing>
             {streamRenderStrategy.render({
               agentId,
@@ -1333,21 +1380,23 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             })}
           </MessageOuterSpacingProvider>
           <Animated.View
-            style={[stylesheet.floatingActionsContainer, floatingActionsAnimatedStyle]}
+            style={[
+              stylesheet.floatingActionsContainer,
+              floatingActionsStyle,
+              floatingActionsAnimatedStyle,
+            ]}
             pointerEvents={floatingActionsHidden ? "none" : "box-none"}
             testID="agent-stream-floating-actions"
           >
-            {messageJumpEntries.length > 0 && (
-              <Pressable
-                style={stylesheet.floatingActionButton}
-                onPress={openMessageJumpSheet}
-                accessibilityRole="button"
-                accessibilityLabel={t("agentStream.messageJump.button")}
-                testID="message-jump-button"
-              >
-                <List size={20} color={stylesheet.messageJumpIcon.color} />
-              </Pressable>
-            )}
+            <Pressable
+              style={stylesheet.floatingActionButton}
+              onPress={openMessageJumpSheet}
+              accessibilityRole="button"
+              accessibilityLabel={t("agentStream.messageJump.button")}
+              testID="message-jump-button"
+            >
+              <List size={20} color={stylesheet.messageJumpIcon.color} />
+            </Pressable>
             {!isNearBottom && (
               <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
                 <Pressable
@@ -1811,6 +1860,8 @@ const stylesheet = StyleSheet.create((theme) => ({
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: "center",
+    marginLeft: "auto",
+    marginRight: "auto",
     paddingHorizontal: theme.spacing[2],
   },
   listContentContainer: {
@@ -1832,6 +1883,8 @@ const stylesheet = StyleSheet.create((theme) => ({
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: "center",
+    marginLeft: "auto",
+    marginRight: "auto",
     paddingHorizontal: theme.spacing[2],
   },
   emptyState: {
@@ -1869,7 +1922,6 @@ const stylesheet = StyleSheet.create((theme) => ({
   floatingActionsContainer: {
     position: "absolute",
     bottom: 16,
-    right: 16,
     alignItems: "center",
     gap: theme.spacing[2],
   },
