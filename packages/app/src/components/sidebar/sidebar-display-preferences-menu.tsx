@@ -28,7 +28,7 @@ interface DisplayPreferenceOption<Value extends string> {
   label: string;
 }
 
-export function SidebarDisplayPreferencesMenu() {
+export function SidebarDisplayPreferencesMenu({ circular = false }: { circular?: boolean }) {
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const hostFilters = useSidebarViewStore((state) => state.hostFilters);
   const setGroupMode = useSidebarViewStore((state) => state.setGroupMode);
@@ -46,9 +46,10 @@ export function SidebarDisplayPreferencesMenu() {
   const triggerStyle = useCallback(
     ({ hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.trigger,
+      circular && styles.triggerCircular,
       hovered && styles.triggerHovered,
     ],
-    [],
+    [circular],
   );
 
   const showHostFilter = hosts.length > 1;
@@ -62,7 +63,7 @@ export function SidebarDisplayPreferencesMenu() {
         accessibilityLabel="Display preferences"
         testID="sidebar-display-preferences-menu"
       >
-        <ThemedSettings2 size={14} uniProps={filterColorMapping} />
+        <ThemedSettings2 size={circular ? 20 : 14} uniProps={filterColorMapping} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" width={220} testID="sidebar-display-preferences-content">
         <View style={styles.menuHeader}>
@@ -171,6 +172,12 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,
+  },
+  triggerCircular: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface3,
   },
   triggerHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
