@@ -163,10 +163,48 @@ function attachWebClickHandler(
   });
 }
 
-export async function sendOsNotification(payload: OsNotificationPayload): Promise<boolean> {
-  // Mobile/native notifications should be remote push only.
-  if (isNative) {
+// Native notifications are local (no remote push / GMS). Expo push was removed
+// in favor of an in-app trigger: the daemon streams attention events over the
+// WebSocket and the app presents them itself. Remote push only worked on Google
+// Play builds and is dead on domestic Chinese Android (no GMS). Imported lazily
+// so web/desktop runtime (and vitest) don't load the expo-notifications native
+// module at all.
+type NativeNotifications = typeof import("expo-notifications");
+
+async function ensureNativePermission(Notifications: NativeNotifications): Promise<boolean> {
+  const existing = await Notifications.getPermissionsAsync();
+  if (existing.status === Notifications.PermissionStatus.GRANTED) {
+    return true;
+  }
+  if (!existing.canAskAgain) {
     return false;
+  }
+  const requested = await Notifications.requestPermissionsAsync();
+  return requested.status === Notifications.PermissionStatus.GRANTED;
+}
+
+async function sendNativeNotification(payload: OsNotificationPayload): Promise<boolean> {
+  const Notifications: NativeNotifications = await import("expo-notifications");
+  const granted = await ensureNativePermission(Notifications);
+  if (!granted) {
+    return false;
+  }
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: payload.title,
+      body: payload.body ?? "",
+      data: payload.data ?? {},
+      sound: "default",
+    },
+    trigger: null,
+  });
+  return true;
+}
+
+export async function sendOsNotification(payload: OsNotificationPayload): Promise<boolean> {
+  // Native notifications are local OS notifications, presented here.
+  if (isNative) {
+    return await sendNativeNotification(payload);
   }
 
   const desktopNotificationSender = getDesktopNotificationSender();

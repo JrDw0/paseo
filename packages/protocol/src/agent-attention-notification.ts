@@ -170,9 +170,9 @@ export function findLatestPermissionRequest(
 }
 
 function resolveAgentAttentionTitle(reason: AgentAttentionReason): string {
-  if (reason === "permission") return "Agent needs permission";
-  if (reason === "error") return "Agent needs attention";
-  return "Agent finished";
+  if (reason === "permission") return "Agent 需要权限";
+  if (reason === "error") return "Agent 需要处理";
+  return "Agent 已完成";
 }
 
 function resolveAgentAttentionPreview(
@@ -188,9 +188,9 @@ function resolveAgentAttentionPreview(
 }
 
 function resolveAgentAttentionFallbackBody(reason: AgentAttentionReason): string {
-  if (reason === "permission") return "Permission requested.";
-  if (reason === "error") return "Encountered an error.";
-  return "Finished working.";
+  if (reason === "permission") return "请求了权限。";
+  if (reason === "error") return "遇到了错误。";
+  return "已完成工作。";
 }
 
 export function buildAgentAttentionNotificationPayload(
