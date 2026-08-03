@@ -1,6 +1,7 @@
 import {
   Fragment,
   type ReactElement,
+  useLayoutEffect,
   useCallback,
   useEffect,
   useMemo,
@@ -92,6 +93,7 @@ function keyExtractor(item: { id: string }): string {
   return item.id;
 }
 
+// oxlint-disable-next-line complexity
 function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrategy }) {
   const {
     agentId,
@@ -103,6 +105,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     listEmptyComponent,
     viewportRef,
     routeBottomAnchorRequest,
+    targetWindow,
     isAuthoritativeHistoryReady,
     onNearBottomChange,
     onScrollMovementChange,
@@ -185,6 +188,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     [segments.liveHead],
   );
   const pendingMessageJumpRef = useRef<PendingMessageJump | null>(null);
+  const pendingMessageJumpAnimatedRef = useRef(true);
   const messageJumpTokenRef = useRef(0);
   const messageJumpRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const getHistoryStartPaginationInput = useStableEvent((): HistoryStartPaginationInput => {
@@ -229,6 +233,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     },
   );
   const evaluateHistoryStart = useStableEvent(() => {
+    if (targetWindow?.suppressBottomAnchor) {
+      return;
+    }
     const transition = evaluateHistoryStartPagination(
       historyStartPaginationStateRef.current,
       getHistoryStartPaginationInput(),
@@ -319,6 +326,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     isAuthoritativeHistoryReady,
     renderStrategy: "inverted-stream",
     transportBehavior: bottomAnchorTransportBehavior,
+    suppress: targetWindow?.suppressBottomAnchor === true,
     getMeasurementState: () => streamViewportMetricsRef.current,
     isNearBottom: () => {
       const metrics = streamViewportMetricsRef.current;
@@ -335,7 +343,8 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   // Android's maintainVisibleContentPosition ignores the list inversion transform and
   // fights the controller's offset-zero correction while the live header grows.
   const maintainVisibleContentPosition =
-    Platform.OS === "android" && bottomAnchorController.mode === "sticky-bottom"
+    targetWindow?.suppressBottomAnchor ||
+    (Platform.OS === "android" && bottomAnchorController.mode === "sticky-bottom")
       ? undefined
       : DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION;
 
@@ -346,8 +355,10 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     }
   }, []);
 
-  const scrollToMessage = useStableEvent((messageId: string) => {
+  const scrollToMessage = useStableEvent((messageId: string, animated: boolean = true) => {
     clearMessageJumpRetryTimeout();
+    programmaticScrollEventBudgetRef.current = 0;
+    pendingMessageJumpAnimatedRef.current = animated;
     const plan = planMessageJump(historyRowIndexById, liveHeadIds, messageId);
     if (plan.kind === "missing") {
       pendingMessageJumpRef.current = null;
@@ -365,7 +376,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       messageId,
       index: plan.index,
     });
-    flatListRef.current?.scrollToIndex({ index: plan.index, viewPosition: 0.5, animated: true });
+    flatListRef.current?.scrollToIndex({ index: plan.index, viewPosition: 0.5, animated });
   });
 
   // Rows outside the render window have no measurable frame: jump to the
@@ -394,7 +405,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
         flatListRef.current?.scrollToIndex({
           index: pending.index,
           viewPosition: 0.5,
-          animated: true,
+          animated: pendingMessageJumpAnimatedRef.current,
         });
       }, MESSAGE_JUMP_RETRY_DELAY_MS);
     },
@@ -405,6 +416,27 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       clearMessageJumpRetryTimeout();
     };
   }, [clearMessageJumpRetryTimeout]);
+
+  useEffect(() => {
+    if (targetWindow?.active) {
+      return;
+    }
+    pendingMessageJumpRef.current = null;
+    clearMessageJumpRetryTimeout();
+  }, [clearMessageJumpRetryTimeout, targetWindow?.active, targetWindow?.generation]);
+
+  useLayoutEffect(() => {
+    if (!targetWindow?.active || !targetWindow.targetMessageId) {
+      return;
+    }
+    scrollToMessage(targetWindow.targetMessageId, false);
+  }, [
+    scrollToMessage,
+    targetWindow?.active,
+    targetWindow?.generation,
+    targetWindow?.focusRevision,
+    targetWindow?.targetMessageId,
+  ]);
 
   useEffect(() => {
     streamViewportMetricsRef.current = {
@@ -471,8 +503,11 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   }, [clearNativeViewportSettling, markNativeViewportSettling]);
 
   useEffect(() => {
+    if (targetWindow?.suppressBottomAnchor) {
+      return;
+    }
     bottomAnchorController.prepareForStickyContentChange();
-  }, [bottomAnchorController, historyRows, segments.liveHead]);
+  }, [bottomAnchorController, historyRows, segments.liveHead, targetWindow?.suppressBottomAnchor]);
 
   useEffect(() => {
     const handle: StreamViewportHandle = {
@@ -662,6 +697,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     isLoadingOlderHistory,
     olderHistoryProgressKey,
     scheduleHistoryStartSettle,
+    targetWindow?.suppressBottomAnchor,
   ]);
 
   const renderItem = useStableEvent(
@@ -720,6 +756,9 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   return (
     <FlatList
       ref={flatListRef}
+      key={
+        targetWindow?.active ? `message-jump-target:${targetWindow.generation}` : "agent-chat-live"
+      }
       data={historyRows}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
