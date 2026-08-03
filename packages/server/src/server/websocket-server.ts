@@ -47,7 +47,10 @@ import { snapshotGitCommandRuntimeMetrics } from "../utils/run-git-command.js";
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import { PushTokenStore } from "./push/token-store.js";
-import { createPushNotificationSender, type PushNotificationSender } from "./push/notifications.js";
+import {
+  createDisabledPushNotificationSender,
+  type PushNotificationSender,
+} from "./push/notifications.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
@@ -674,7 +677,7 @@ export class VoiceAssistantWebSocketServer {
     const pushLogger = this.logger.child({ module: "push" });
     this.pushTokenStore = new PushTokenStore(pushLogger, join(paseoHome, "push-tokens.json"));
     this.pushNotificationSender =
-      pushNotificationSender ?? createPushNotificationSender(pushLogger, this.pushTokenStore);
+      pushNotificationSender ?? createDisabledPushNotificationSender(pushLogger);
 
     this.agentManager.setAgentAttentionCallback((params) => {
       void this.broadcastAgentAttention(params).catch((err) => {

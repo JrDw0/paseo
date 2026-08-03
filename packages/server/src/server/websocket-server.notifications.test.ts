@@ -241,7 +241,7 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
 
     expect(pushNotifications.sent).toEqual([
       {
-        title: "Agent finished",
+        title: "Agent 已完成",
         body: "Done. Updated README.md and link.",
         data: {
           serverId: "srv-test",

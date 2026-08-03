@@ -29,6 +29,14 @@ export async function setNotificationChannelAsync() {
   return null;
 }
 
+export async function presentNotificationAsync() {
+  return null;
+}
+
+export async function scheduleNotificationAsync() {
+  return null;
+}
+
 export function setNotificationHandler(): void {}
 
 export function addNotificationResponseReceivedListener() {

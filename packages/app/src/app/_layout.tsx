@@ -217,11 +217,14 @@ function PushNotificationRouter() {
 
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        // When the app is open, don't show OS banners.
-        shouldShowAlert: false,
-        shouldShowBanner: false,
-        shouldShowList: false,
-        shouldPlaySound: false,
+        // Present local notifications even while the app is foregrounded so a
+        // background agent's attention still shows a banner. Which agent "needs
+        // bannering" is filtered upstream in notifyAgentAttention (skips the one
+        // currently focused, and error reasons).
+        shouldShowAlert: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
         shouldSetBadge: false,
       }),
     });
