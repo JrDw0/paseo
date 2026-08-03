@@ -67,6 +67,8 @@ import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import { MessageJumpSheet, type MessageJumpEntry } from "@/components/message-jump-sheet";
 import { formatTimeAgo } from "@/utils/time";
 import { useMessageJumpIndex } from "@/hooks/use-message-jump-index";
+import { useMessageJumpTargetWindow } from "@/hooks/use-message-jump-target-window";
+import type { JumpIndexEntry } from "@/timeline/jump-index";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 import { decideMessageJump, findLoadedMessageJumpTarget } from "./jump-decision";
 import { driveJumpBackfill } from "./jump-backfill";
@@ -353,6 +355,18 @@ function buildLoadedFallbackJumpEntries(
   return entries;
 }
 
+function findRefreshedMessageJumpEntry(
+  original: Pick<MessageJumpEntry, "id" | "seq">,
+  entries: readonly JumpIndexEntry[],
+): JumpIndexEntry | null {
+  const sequenceFallback = original.id.startsWith("seq:");
+  return (
+    entries.find(
+      (entry) => entry.id === original.id || (sequenceFallback && entry.seq === original.seq),
+    ) ?? null
+  );
+}
+
 function buildChatHistoryAttachment(input: {
   draftId: string;
   serverId: string;
@@ -405,6 +419,10 @@ function buildForkDraftTabTarget(
 }
 
 const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamViewProps>(
+  // The stream view owns several platform and interaction state machines.
+  // Keep the complexity check local while the jump path remains colocated with
+  // the viewport wiring it coordinates.
+  // oxlint-disable-next-line complexity
   function AgentStreamView(
     {
       agentId,
@@ -755,24 +773,37 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     }
     const effectiveStreamItems = isActive ? streamItems : frozenStreamItemsRef.current;
     const effectiveStreamHead = isActive ? streamHead : frozenStreamHeadRef.current;
+    const targetWindowController = useMessageJumpTargetWindow({
+      client,
+      agentId,
+      isActive: !isWeb && isActive,
+    });
+    const clearTargetWindow = targetWindowController.clear;
+    const openTargetWindow = targetWindowController.open;
+    const retryTargetWindow = targetWindowController.retry;
+    const targetWindowIsActive = !isWeb && isActive && targetWindowController.active;
+    const displayStreamItems = targetWindowIsActive
+      ? targetWindowController.items
+      : effectiveStreamItems;
+    const displayStreamHead = targetWindowIsActive ? EMPTY_STREAM_HEAD : effectiveStreamHead;
     // Keep retained history outside the 48ms live-head flush path.
     const preparedToolCallHistory = useMemo(
-      () => prepareToolCallHistory(toolCallDetailLevel, effectiveStreamItems),
-      [effectiveStreamItems, toolCallDetailLevel],
+      () => prepareToolCallHistory(toolCallDetailLevel, displayStreamItems),
+      [displayStreamItems, toolCallDetailLevel],
     );
     const projectedToolCalls = useMemo(
       () =>
         projectToolCallDetailLevel({
           level: toolCallDetailLevel,
-          tail: effectiveStreamItems,
-          head: effectiveStreamHead ?? EMPTY_STREAM_HEAD,
+          tail: displayStreamItems,
+          head: displayStreamHead ?? EMPTY_STREAM_HEAD,
           preparedHistory: preparedToolCallHistory,
           isTurnActive: context.status === "running",
         }),
       [
         context.status,
-        effectiveStreamHead,
-        effectiveStreamItems,
+        displayStreamHead,
+        displayStreamItems,
         preparedToolCallHistory,
         toolCallDetailLevel,
       ],
@@ -808,6 +839,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ref,
       () => ({
         scrollToBottom(reason = "jump-to-bottom") {
+          clearTargetWindow();
           viewportRef.current?.scrollToBottom(reason);
         },
         scrollToMessage(messageId: string) {
@@ -817,15 +849,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           viewportRef.current?.prepareForViewportChange();
         },
       }),
-      [],
+      [clearTargetWindow],
     );
 
     const scrollToBottom = useCallback(() => {
+      clearTargetWindow();
       viewportRef.current?.scrollToBottom("jump-to-bottom");
-    }, []);
+    }, [clearTargetWindow]);
 
     const [isMessageJumpSheetOpen, setIsMessageJumpSheetOpen] = useState(false);
-    const [pendingMessageJump, setPendingMessageJump] = useState<MessageJumpEntry | null>(null);
     const [streamContainerWidth, setStreamContainerWidth] = useState<number | null>(null);
 
     const openMessageJumpSheet = useCallback(() => setIsMessageJumpSheetOpen(true), []);
@@ -854,7 +886,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     } = useMessageJumpIndex({
       serverId: resolvedServerId,
       agentId,
-      enabled: isMessageJumpSheetOpen,
+      enabled: isMessageJumpSheetOpen || (!isWeb && isActive),
     });
     const messageJumpEntries = useMemo<MessageJumpEntry[]>(() => {
       const combined = [...projectedToolCalls.tail, ...(projectedToolCalls.head ?? [])];
@@ -896,9 +928,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ],
       [streamLayout.history, streamLayout.liveHead],
     );
-
+    const [pendingMessageJump, setPendingMessageJump] = useState<MessageJumpEntry | null>(null);
     useEffect(() => {
-      if (!pendingMessageJump) {
+      if (!pendingMessageJump || !isWeb) {
         return;
       }
       const targetId = findLoadedMessageJumpTarget(renderedStreamItems, pendingMessageJump);
@@ -912,50 +944,72 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       return () => cancelAnimationFrame(frame);
     }, [pendingMessageJump, renderedStreamItems]);
 
+    const performMessageJump = useCallback(
+      (entry: MessageJumpEntry) => {
+        setIsMessageJumpSheetOpen(false);
+        if (entry.seq <= 0) {
+          clearTargetWindow();
+          viewportRef.current?.scrollToMessage(entry.id);
+          return;
+        }
+        if (isWeb) {
+          const decision = decideMessageJump(entry, {
+            isSeqCovered: () => Boolean(findLoadedMessageJumpTarget(renderedStreamItems, entry)),
+          });
+          if (decision.kind === "scroll") {
+            setPendingMessageJump(entry);
+            return;
+          }
+          void driveJumpBackfill({
+            targetSeq: entry.seq,
+            readStartSeq: () => {
+              const currentCursor = useSessionStore
+                .getState()
+                .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
+              return currentCursor?.startSeq ?? Number.POSITIVE_INFINITY;
+            },
+            readEpoch: () =>
+              useSessionStore
+                .getState()
+                .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId)?.epoch ?? entry.epoch,
+            fetchPage: (request) =>
+              getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, request),
+            onCovered: () => setPendingMessageJump(entry),
+          }).catch((error) => {
+            console.warn("[Timeline] failed to backfill message jump target", error);
+          });
+          return;
+        }
+        openTargetWindow(entry);
+      },
+      [agentId, clearTargetWindow, openTargetWindow, renderedStreamItems, resolvedServerId],
+    );
+
     const handleJumpToMessage = useCallback(
       (entry: MessageJumpEntry) => {
-        // Fallback rows (index not yet loaded) lack a usable seq but are by
-        // definition already rendered, so always scroll them.
         if (entry.seq <= 0) {
-          setIsMessageJumpSheetOpen(false);
-          viewportRef.current?.scrollToMessage(entry.id);
+          performMessageJump(entry);
           return;
         }
         const timelineCursor = useSessionStore
           .getState()
           .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
         if (entry.epoch && timelineCursor && entry.epoch !== timelineCursor.epoch) {
-          void refreshMessageJumpIndex();
+          void refreshMessageJumpIndex().then((refreshedEntries) => {
+            const refreshedEntry = refreshedEntries
+              ? findRefreshedMessageJumpEntry(entry, refreshedEntries)
+              : null;
+            if (!refreshedEntry) {
+              return null;
+            }
+            performMessageJump({ ...refreshedEntry, hasImages: entry.hasImages });
+            return null;
+          });
           return;
         }
-        setIsMessageJumpSheetOpen(false);
-        const decision = decideMessageJump(entry, {
-          isSeqCovered: () => Boolean(findLoadedMessageJumpTarget(renderedStreamItems, entry)),
-        });
-        if (decision.kind === "scroll") {
-          setPendingMessageJump(entry);
-          return;
-        }
-        // Target row not yet loaded: page the stream back until it is, then scroll.
-        void driveJumpBackfill({
-          targetSeq: entry.seq,
-          readStartSeq: () => {
-            const currentCursor = useSessionStore
-              .getState()
-              .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
-            return currentCursor?.startSeq ?? Number.POSITIVE_INFINITY;
-          },
-          readEpoch: () =>
-            useSessionStore.getState().sessions[resolvedServerId]?.agentTimelineCursor.get(agentId)
-              ?.epoch ?? entry.epoch,
-          fetchPage: (request) =>
-            getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, request),
-          onCovered: () => setPendingMessageJump(entry),
-        }).catch((error) => {
-          console.warn("[Timeline] failed to backfill message jump target", error);
-        });
+        performMessageJump(entry);
       },
-      [agentId, refreshMessageJumpIndex, renderedStreamItems, resolvedServerId],
+      [agentId, performMessageJump, refreshMessageJumpIndex, resolvedServerId],
     );
 
     const setInlineDetailsExpanded = useCallback(
@@ -1351,6 +1405,32 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [expandedToolCallGroupIds, isMobile, projectedToolCalls.historyGroupUpdatesByHostId],
     );
 
+    let targetWindowView: ReactNode = null;
+    if (targetWindowController.status === "loading" && targetWindowController.target) {
+      targetWindowView = (
+        <View style={stylesheet.targetWindowNotice} testID="message-jump-target-loading">
+          <ThemedLoadingSpinner size="small" uniProps={mutedColorMapping} />
+        </View>
+      );
+    } else if (targetWindowController.status === "error" && targetWindowController.target) {
+      targetWindowView = (
+        <View style={stylesheet.targetWindowNotice} testID="message-jump-target-error">
+          <Text style={stylesheet.targetWindowNoticeText}>
+            {t("agentPanel.states.timelineSyncFailed")}
+          </Text>
+          <Pressable
+            style={stylesheet.targetWindowRetryButton}
+            onPress={retryTargetWindow}
+            accessibilityRole="button"
+            accessibilityLabel={t("common.actions.retry")}
+            testID="message-jump-target-retry"
+          >
+            <Text style={stylesheet.targetWindowRetryText}>{t("common.actions.retry")}</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
     return (
       <ToolCallSheetProvider>
         <View style={stylesheet.container} onLayout={handleStreamContainerLayout}>
@@ -1377,8 +1457,23 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               listStyle: stylesheet.list,
               baseListContentContainerStyle: stylesheet.listContentContainer,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
+              targetWindow: {
+                active: targetWindowIsActive,
+                generation: targetWindowController.generation,
+                suppressBottomAnchor: isActive && targetWindowController.suppressBottomAnchor,
+                status:
+                  targetWindowController.status === "idle"
+                    ? "ready"
+                    : targetWindowController.status,
+                targetMessageId: targetWindowController.targetMessageId,
+                focusRevision: targetWindowController.focusRevision,
+                error: targetWindowController.error,
+                hasNewer: targetWindowController.hasNewer,
+                onRetry: retryTargetWindow,
+              },
             })}
           </MessageOuterSpacingProvider>
+          {targetWindowView}
           <Animated.View
             style={[
               stylesheet.floatingActionsContainer,
@@ -1397,7 +1492,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             >
               <List size={20} color={stylesheet.messageJumpIcon.color} />
             </Pressable>
-            {!isNearBottom && (
+            {(targetWindowIsActive || !isNearBottom) && (
               <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
                 <Pressable
                   style={stylesheet.floatingActionButton}
@@ -1909,6 +2004,34 @@ const stylesheet = StyleSheet.create((theme) => ({
   syncingIndicatorText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
+  },
+  targetWindowNotice: {
+    position: "absolute",
+    top: theme.spacing[2],
+    left: theme.spacing[2],
+    right: theme.spacing[2],
+    zIndex: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.spacing[1],
+    backgroundColor: theme.colors.surface2,
+  },
+  targetWindowNoticeText: {
+    flex: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  targetWindowRetryButton: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+  },
+  targetWindowRetryText: {
+    color: theme.colors.accent,
+    fontSize: theme.fontSize.xs,
   },
   invertedWrapper: {
     transform: [{ scaleY: -1 }],
