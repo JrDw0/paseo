@@ -192,7 +192,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface4,
   },
   mobileFooterCirclePressed: {
     opacity: 0.82,
