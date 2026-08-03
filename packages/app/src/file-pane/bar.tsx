@@ -30,7 +30,7 @@ export function FilePanelBar({
   conflict?: FileConflictAlertState;
 }) {
   const { t } = useTranslation();
-  const markdownModes = [
+  const renderModes = [
     {
       value: "preview" as const,
       label: t("panels.file.editor.preview"),
@@ -103,7 +103,7 @@ export function FilePanelBar({
             value={mode}
             onValueChange={onModeChange}
             testID="file-markdown-mode"
-            options={markdownModes}
+            options={renderModes}
           />
         ) : null}
       </View>

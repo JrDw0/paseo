@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
+import { isRenderedHtmlFile, isRenderedMarkdownFile } from "@/components/file-pane-render-mode";
+
+describe("isRenderedHtmlFile", () => {
+  it("detects .html and .htm files", () => {
+    expect(isRenderedHtmlFile("index.html")).toBe(true);
+    expect(isRenderedHtmlFile("docs/guide.HTM")).toBe(true);
+    expect(isRenderedHtmlFile("report.html")).toBe(true);
+  });
+
+  it("does not treat markdown or other text files as html", () => {
+    expect(isRenderedHtmlFile("README.md")).toBe(false);
+    expect(isRenderedHtmlFile("src/index.ts")).toBe(false);
+    expect(isRenderedHtmlFile("page.html.txt")).toBe(false);
+  });
+});
 
 describe("isRenderedMarkdownFile", () => {
   it("detects .md files", () => {
