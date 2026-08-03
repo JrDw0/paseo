@@ -6096,6 +6096,22 @@ export class Session {
     pageLimit: number;
     messageKind?: "user";
   }): AgentTimelineProjectionSelection {
+    if (input.messageKind === "user" && input.direction === "tail" && input.pageLimit === 0) {
+      // The jump index only needs accepted user rows. Projecting the complete
+      // conversation first makes a background index refresh compete with an
+      // interactive target-window request on long sessions.
+      const userRows = input.controlTimeline.rows.filter((row) => row.item.type === "user_message");
+      const entries = projectTimelineRows({ rows: userRows, mode: "canonical" });
+      return {
+        timeline: input.controlTimeline,
+        entries,
+        startSeq: entries[0]?.seqStart ?? null,
+        endSeq: entries.at(-1)?.seqEnd ?? null,
+        hasOlder: false,
+        hasNewer: false,
+      };
+    }
+
     const timeline = this.shouldUseFullTimelineForProjectedPage({
       timeline: input.controlTimeline,
       pageLimit: input.pageLimit,

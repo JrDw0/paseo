@@ -46,6 +46,7 @@ import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle
 import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
 import { shouldShowSidebarWorkspaceDiffStat } from "@/components/sidebar/sidebar-workspace-row-layout";
+import { useIsCompactFormFactor } from "@/constants/layout";
 
 // Themed icon wrappers
 const foregroundMutedColorMapping = (theme: Theme) => ({
@@ -685,6 +686,7 @@ function StatusWorkspaceRowInner({
   reserveIdleStatusIndicatorSpace?: boolean;
 }) {
   const isTouchPlatform = platformIsNative;
+  const isCompact = useIsCompactFormFactor();
 
   const isDesktop = !isTouchPlatform;
   const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
@@ -701,12 +703,12 @@ function StatusWorkspaceRowInner({
   return (
     <SidebarWorkspaceRowFrame workspace={workspace}>
       {({ isHovered, hoverHandlers }) => {
-        const showShortcut = showShortcutBadge && shortcutNumber !== null;
-        const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
+        const showShortcut = showShortcutBadge && shortcutNumber !== null && !isCompact;
+        const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform || isCompact));
         const showKebabInSlot = showKebab && !showShortcut;
         const showDiffStat = shouldShowSidebarWorkspaceDiffStat({
           hasDiffStat: Boolean(workspace.diffStat),
-          isTouchPlatform,
+          isCompact,
         });
         const shouldRenderActionSlot = Boolean(onArchive || showDiffStat);
         const workspaceRowStyle = getStatusWorkspaceRowStyle({ selected, isHovered });
@@ -736,6 +738,7 @@ function StatusWorkspaceRowInner({
                   <StatusWorkspaceActionSlot
                     workspace={workspace}
                     showBase={showDiffStat && !showKebabInSlot && !showShortcut}
+                    compact={isCompact}
                     showKebab={showKebabInSlot}
                     isPinned={isPinned}
                     onTogglePin={onTogglePin}
@@ -762,6 +765,7 @@ function StatusWorkspaceRowInner({
 function StatusWorkspaceActionSlot({
   workspace,
   showBase,
+  compact,
   showKebab,
   isPinned,
   onTogglePin,
@@ -777,6 +781,7 @@ function StatusWorkspaceActionSlot({
 }: {
   workspace: SidebarWorkspaceEntry;
   showBase: boolean;
+  compact?: boolean;
   showKebab: boolean;
   isPinned?: boolean;
   onTogglePin?: () => void;
@@ -791,7 +796,7 @@ function StatusWorkspaceActionSlot({
   archiveShortcutKeys?: ShortcutKey[][] | null;
 }) {
   return (
-    <SidebarWorkspaceTrailingActionSlot>
+    <SidebarWorkspaceTrailingActionSlot compact={compact}>
       <SidebarWorkspaceTrailingActionBase visible={showBase}>
         {workspace.diffStat ? (
           <DiffStat

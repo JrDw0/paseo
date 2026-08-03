@@ -11,7 +11,7 @@ import type { ShortcutKey } from "@/utils/format-shortcut";
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
-type SidebarHeaderRowVariant = "header" | "compact";
+type SidebarHeaderRowVariant = "header" | "compact" | "mobilePrimary" | "mobileSecondary";
 
 interface SidebarHeaderRowProps {
   icon: LucideIcon;
@@ -53,6 +53,8 @@ export function SidebarHeaderRow({
     ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.button,
       variant === "compact" && styles.buttonCompact,
+      variant === "mobilePrimary" && styles.buttonMobilePrimary,
+      variant === "mobileSecondary" && styles.buttonMobileSecondary,
       (Boolean(hovered) || isActive) && styles.buttonHovered,
     ],
     [isActive, variant],
@@ -60,7 +62,7 @@ export function SidebarHeaderRow({
 
   const renderChildren = useCallback(
     (state: PressableStateCallbackType & { hovered?: boolean }) => {
-      const isHighlighted = Boolean(state.hovered) || isActive;
+      const isHighlighted = variant === "mobilePrimary" || Boolean(state.hovered) || isActive;
       return (
         <>
           <ThemedIcon
@@ -74,7 +76,7 @@ export function SidebarHeaderRow({
         </>
       );
     },
-    [ThemedIcon, isActive, label, shortcutKeys],
+    [ThemedIcon, isActive, label, shortcutKeys, variant],
   );
 
   return (
@@ -144,6 +146,17 @@ const styles = StyleSheet.create((theme) => ({
     // Match the project rows' inner padding so the icons align on one vertical
     // edge with the workspace list below (base button uses a wider spacing[3]).
     paddingHorizontal: theme.spacing[2],
+  },
+  buttonMobilePrimary: {
+    minHeight: 48,
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    backgroundColor: theme.colors.accent,
+  },
+  buttonMobileSecondary: {
+    minHeight: 44,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
   },
   buttonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,

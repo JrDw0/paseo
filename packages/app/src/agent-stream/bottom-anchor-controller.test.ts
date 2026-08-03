@@ -118,6 +118,7 @@ function createDriverHarness(input?: {
   const context = {
     agentId: "agent-1",
     authoritativeReady: input?.authoritativeReady ?? true,
+    suppressed: false,
     renderStrategy: "forward-stream",
     transportBehavior: input?.transportBehavior ?? {
       verificationDelayFrames: 0,
@@ -142,6 +143,7 @@ function createDriverHarness(input?: {
     getRenderStrategy: () => context.renderStrategy,
     getTransportBehavior: () => context.transportBehavior,
     getMeasurementState: () => context.measurementState,
+    getSuppressed: () => context.suppressed,
     isNearBottom: () => context.nearBottom,
     scrollToBottom,
     onModeChange: (mode) => {
@@ -205,6 +207,81 @@ describe("deriveBottomAnchorBlockedReason", () => {
 });
 
 describe("bottom anchor controller driver", () => {
+  it("does not anchor while a target window suppresses bottom following", () => {
+    const harness = createDriverHarness();
+
+    harness.driver.setSuppressed(true);
+    harness.driver.handleContentSizeChange({ previousContentHeight: 1200, contentHeight: 1600 });
+    harness.driver.handleViewportMetricsChange({
+      previousViewportWidth: 800,
+      viewportWidth: 800,
+      previousViewportHeight: 480,
+      viewportHeight: 500,
+    });
+    harness.scheduler.flushAll();
+
+    expect(harness.scrollAttempts).toHaveLength(0);
+    expect(harness.driver.getSnapshot()).toMatchObject({ mode: "detached", pendingRequest: null });
+  });
+
+  it("ignores anchor callbacks that were queued before target suppression", () => {
+    const harness = createDriverHarness();
+
+    harness.driver.requestLocalAnchor({ agentId: "agent-1", reason: "jump-to-bottom" });
+    harness.context.suppressed = true;
+    harness.scheduler.flushAll();
+
+    expect(harness.scrollAttempts).toHaveLength(0);
+  });
+
+  it("does not let a route restoration request cancel an active target window", () => {
+    const harness = createDriverHarness();
+
+    harness.driver.setSuppressed(true);
+    harness.driver.applyRouteRequest({
+      agentId: "agent-1",
+      reason: "resume",
+      requestKey: "route:agent-1:resume:2",
+    });
+    harness.scheduler.flushAll();
+
+    expect(harness.scrollAttempts).toHaveLength(0);
+    expect(harness.driver.getSnapshot()).toMatchObject({
+      mode: "detached",
+      pendingRequest: null,
+    });
+  });
+
+  it("does not retry a bottom anchor after suppression starts during verification", () => {
+    const harness = createDriverHarness({
+      transportBehavior: {
+        verificationDelayFrames: 1,
+        verificationRetryMode: "rescroll",
+      },
+    });
+    harness.setScrollToBottomBehavior(() => {
+      harness.context.nearBottom = false;
+    });
+
+    harness.driver.requestLocalAnchor({ agentId: "agent-1", reason: "jump-to-bottom" });
+    harness.scheduler.flushFrame();
+    harness.context.suppressed = true;
+    harness.scheduler.flushAll();
+
+    expect(harness.scrollAttempts).toHaveLength(1);
+  });
+
+  it("restores explicit bottom following after suppression is cleared", () => {
+    const harness = createDriverHarness();
+
+    harness.driver.setSuppressed(true);
+    harness.driver.setSuppressed(false);
+    harness.driver.requestLocalAnchor({ agentId: "agent-1", reason: "jump-to-bottom" });
+    harness.scheduler.flushAll();
+
+    expect(harness.scrollAttempts).toEqual([true]);
+  });
+
   it("keeps initial-entry pending until authoritative history and current geometry exist", () => {
     const harness = createDriverHarness({
       authoritativeReady: false,

@@ -912,6 +912,8 @@ export const ar: TranslationResources = {
       settings: "إعدادات",
       closeSidebar: "إغلاق الشريط الجانبي",
       importRecentSessions: "استيراد جلسة حديثة",
+      more: "المزيد",
+      displayPreferences: "تفضيلات العرض",
     },
     help: {
       trigger: "المساعدة والدعم",
@@ -966,6 +968,11 @@ export const ar: TranslationResources = {
       status: {
         scriptsAvailable: "البرامج النصية المتاحة",
         creating: "جارٍ الإنشاء...",
+        needsInput: "يتطلب إدخالاً",
+        failed: "فشل",
+        attention: "جاهز للمراجعة",
+        running: "قيد العمل",
+        done: "تم",
       },
       actions: {
         menu: "إجراءات Workspace",

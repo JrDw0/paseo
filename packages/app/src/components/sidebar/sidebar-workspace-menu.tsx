@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Archive, CircleCheck, Copy, MoreVertical, Pencil, Pin, PinOff } from "lucide-react-native";
 import { isNative, isWeb } from "@/constants/platform";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import type { Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import {
@@ -78,6 +79,11 @@ export function SidebarWorkspaceMenu({
   openInFileManagerPath,
 }: SidebarWorkspaceMenuProps) {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
+  const compactTriggerStyle = useCallback(
+    (state: PressableStateCallbackType & { hovered?: boolean }) => triggerStyle(state, isCompact),
+    [isCompact],
+  );
   const archiveTrailing = useMemo(
     () => (archiveShortcutKeys && !isNative ? <Shortcut chord={archiveShortcutKeys} /> : null),
     [archiveShortcutKeys],
@@ -87,7 +93,7 @@ export function SidebarWorkspaceMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         hitSlop={8}
-        style={triggerStyle}
+        style={compactTriggerStyle}
         accessibilityRole={isWeb ? undefined : "button"}
         accessibilityLabel={t("sidebar.workspace.actions.menu")}
         testID={`sidebar-workspace-kebab-${workspaceKey}`}
@@ -159,8 +165,11 @@ export function SidebarWorkspaceMenu({
   );
 }
 
-function triggerStyle({ hovered = false }: PressableStateCallbackType & { hovered?: boolean }) {
-  return [styles.trigger, hovered && styles.triggerHovered];
+function triggerStyle(
+  { hovered = false }: PressableStateCallbackType & { hovered?: boolean },
+  isCompact: boolean,
+) {
+  return [styles.trigger, isCompact && styles.triggerCompact, hovered && styles.triggerHovered];
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -168,6 +177,12 @@ const styles = StyleSheet.create((theme) => ({
     padding: 2,
     borderRadius: 4,
     marginLeft: 2,
+  },
+  triggerCompact: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
   },
   triggerHovered: {
     backgroundColor: theme.colors.surface2,
