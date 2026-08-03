@@ -969,6 +969,8 @@ export const ja: TranslationResources = {
       settings: "設定",
       closeSidebar: "サイドバーを閉じる",
       importRecentSessions: "最近のセッションをインポート",
+      more: "その他",
+      displayPreferences: "表示設定",
     },
     help: {
       trigger: "ヘルプとサポート",
@@ -1024,6 +1026,11 @@ export const ja: TranslationResources = {
         serviceRunning: "サービス {{name}} 実行中",
         serviceUnhealthy: "サービス {{name}} 異常",
         creating: "作成中...",
+        needsInput: "入力が必要",
+        failed: "失敗",
+        attention: "レビュー待ち",
+        running: "作業中",
+        done: "完了",
       },
       actions: {
         menu: "ワークスペースアクション",

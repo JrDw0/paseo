@@ -111,6 +111,10 @@ interface SidebarLabels {
   schedules: string;
   importSession: string;
   closeSidebar: string;
+  more: string;
+  displayPreferences: string;
+  importRecentSessions: string;
+  help: string;
 }
 
 interface MobileSidebarProps extends SidebarSharedProps {
@@ -238,6 +242,10 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
       schedules: t("sidebar.sections.schedules"),
       importSession: t("sidebar.actions.importRecentSessions"),
       closeSidebar: t("sidebar.actions.closeSidebar"),
+      more: t("sidebar.actions.more"),
+      displayPreferences: t("sidebar.actions.displayPreferences"),
+      importRecentSessions: t("sidebar.actions.importRecentSessions"),
+      help: t("sidebar.help.trigger"),
     }),
     [t],
   );
@@ -315,6 +323,7 @@ function FooterIconButton({
   iconSize,
   shortcutKeys,
   theme,
+  hidden = false,
 }: {
   onPress: () => void;
   testID: string;
@@ -324,13 +333,14 @@ function FooterIconButton({
   shortcutKeys?: ReturnType<typeof useShortcutKeys>;
   theme: SidebarTheme;
   buttonRef?: RefObject<View | null>;
+  hidden?: boolean;
 }) {
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
         <Pressable
           ref={buttonRef}
-          style={styles.footerIconButton}
+          style={[styles.footerIconButton, hidden && styles.footerIconButtonHidden]}
           testID={testID}
           nativeID={testID}
           collapsable={false}
@@ -417,15 +427,29 @@ function SidebarHostPicker({
   label,
   onAddHost,
   onOpenHostSettings,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   theme: SidebarTheme;
   label: string;
   onAddHost: () => void;
   onOpenHostSettings: (serverId: string) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
   const hosts = useHosts();
   const triggerRef = useRef<View | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = controlledOpen ?? internalOpen;
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setInternalOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [onOpenChange],
+  );
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -434,7 +458,9 @@ function SidebarHostPicker({
     [onOpenHostSettings],
   );
 
-  const handleOpen = useCallback(() => setIsOpen(true), []);
+  const handleOpen = useCallback(() => {
+    handleOpenChange(true);
+  }, [handleOpenChange]);
 
   return (
     <HostPicker
@@ -442,7 +468,7 @@ function SidebarHostPicker({
       value=""
       onSelect={handleSelect}
       open={isOpen}
-      onOpenChange={setIsOpen}
+      onOpenChange={handleOpenChange}
       anchorRef={triggerRef}
       includeAddHost
       onAddHost={onAddHost}
@@ -462,6 +488,7 @@ function SidebarHostPicker({
         icon={Server}
         iconSize={theme.iconSize.sm}
         theme={theme}
+        hidden={hideTrigger}
       />
     </HostPicker>
   );
@@ -491,7 +518,7 @@ const SidebarNewWorkspaceHeaderRow = memo(function SidebarNewWorkspaceHeaderRow(
 }: {
   label: string;
   testID: string;
-  variant: "header" | "compact";
+  variant: "header" | "compact" | "mobilePrimary";
   shortcutKeys: ShortcutKey[][] | null;
   onBeforeNavigate?: () => void;
 }) {
@@ -1190,8 +1217,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
     flex: 1,
-    maxWidth: 220,
-    height: 28,
+    maxWidth: 260,
+    height: {
+      xs: 44,
+      md: 28,
+    },
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -1211,8 +1241,57 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,
   },
+  footerIconButtonHidden: {
+    opacity: 0,
+    position: "absolute",
+    left: 0,
+    top: 0,
+  },
   workspacesHeaderIconButtonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  mobileSidebarFooter: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    justifyContent: "space-around",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  mobileFooterAction: {
+    minHeight: 48,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[1],
+    borderRadius: theme.borderRadius.lg,
+  },
+  mobileFooterActionLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 16,
+  },
+  mobileMoreSheetContent: {
+    gap: theme.spacing[1],
+  },
+  mobileMoreActionRow: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.lg,
+  },
+  mobileMoreActionRowPressed: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  mobileMoreActionLabel: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
   },
   sidebarContent: {
     flex: 1,

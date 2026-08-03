@@ -980,6 +980,8 @@ export const ru: TranslationResources = {
       settings: "Настройки",
       closeSidebar: "Закрыть боковую панель",
       importRecentSessions: "Импортировать недавнюю сессию",
+      more: "Еще",
+      displayPreferences: "Настройки отображения",
     },
     help: {
       trigger: "Помощь и поддержка",
@@ -1035,6 +1037,11 @@ export const ru: TranslationResources = {
         serviceRunning: "Сервис {{name}} запущен",
         serviceUnhealthy: "Сервис {{name}} неисправен",
         creating: "Создание...",
+        needsInput: "Требуется ввод",
+        failed: "Ошибка",
+        attention: "Готово к проверке",
+        running: "В работе",
+        done: "Готово",
       },
       actions: {
         menu: "Действия Workspace",

@@ -989,6 +989,8 @@ export const es: TranslationResources = {
       settings: "Ajustes",
       closeSidebar: "Cerrar barra lateral",
       importRecentSessions: "Importar sesión reciente",
+      more: "Más",
+      displayPreferences: "Preferencias de visualización",
     },
     help: {
       trigger: "Ayuda y soporte",
@@ -1044,6 +1046,11 @@ export const es: TranslationResources = {
         serviceRunning: "Servicio {{name}} en ejecución",
         serviceUnhealthy: "Servicio {{name}} con fallos",
         creating: "Creando...",
+        needsInput: "Entrada necesaria",
+        failed: "Error",
+        attention: "Listo para revisar",
+        running: "Trabajando",
+        done: "Hecho",
       },
       actions: {
         menu: "AccionesWorkspace",

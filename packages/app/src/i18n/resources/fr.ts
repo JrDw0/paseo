@@ -988,6 +988,8 @@ export const fr: TranslationResources = {
       settings: "Paramètres",
       closeSidebar: "Fermer la barre latérale",
       importRecentSessions: "Importer une session récente",
+      more: "Plus",
+      displayPreferences: "Préférences d'affichage",
     },
     help: {
       trigger: "Aide et assistance",
@@ -1043,6 +1045,11 @@ export const fr: TranslationResources = {
         serviceRunning: "Service {{name}} en cours",
         serviceUnhealthy: "Service {{name}} en échec",
         creating: "Création...",
+        needsInput: "Saisie requise",
+        failed: "Échec",
+        attention: "Prêt à vérifier",
+        running: "En cours",
+        done: "Terminé",
       },
       actions: {
         menu: "ActionsWorkspace",

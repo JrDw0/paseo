@@ -968,6 +968,8 @@ export const en = {
       settings: "Settings",
       closeSidebar: "Close sidebar",
       importRecentSessions: "Import recent session",
+      more: "More",
+      displayPreferences: "Display preferences",
     },
     help: {
       trigger: "Help and support",
@@ -1023,6 +1025,11 @@ export const en = {
         serviceRunning: "Service {{name}} running",
         serviceUnhealthy: "Service {{name}} unhealthy",
         creating: "Creating...",
+        needsInput: "Needs input",
+        failed: "Failed",
+        attention: "Ready to review",
+        running: "Working",
+        done: "Done",
       },
       actions: {
         menu: "Workspace actions",

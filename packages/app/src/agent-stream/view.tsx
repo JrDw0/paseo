@@ -908,7 +908,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         setIsMessageJumpSheetOpen(false);
         if (entry.seq <= 0) {
           clearTargetWindow();
-          viewportRef.current?.scrollToMessage(entry.id);
+          viewportRef.current?.scrollToMessage?.(entry.id);
           return;
         }
         if (isWeb) {
