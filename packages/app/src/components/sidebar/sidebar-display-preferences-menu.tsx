@@ -207,7 +207,7 @@ const styles = StyleSheet.create((theme) => ({
     width: 44,
     height: 44,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface4,
   },
   triggerHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
