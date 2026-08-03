@@ -83,7 +83,6 @@ import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
 import { useChatOutline } from "@/agent-stream/chat-outline/use-chat-outline";
-import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
 import {
   CompletedTurnFooterRow,
@@ -760,7 +759,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           viewportRef.current?.scrollToBottom(reason);
         },
         scrollToMessage(messageId: string) {
-          viewportRef.current?.scrollToMessage(messageId);
+          viewportRef.current?.scrollToMessage?.(messageId);
         },
         prepareForViewportChange() {
           viewportRef.current?.prepareForViewportChange();
@@ -866,7 +865,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         return;
       }
       const frame = requestAnimationFrame(() => {
-        viewportRef.current?.scrollToMessage(targetId);
+        viewportRef.current?.scrollToMessage?.(targetId);
         setPendingMessageJump(null);
       });
       return () => cancelAnimationFrame(frame);
@@ -878,7 +877,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         // definition already rendered, so always scroll them.
         if (entry.seq <= 0) {
           setIsMessageJumpSheetOpen(false);
-          viewportRef.current?.scrollToMessage(entry.id);
+          viewportRef.current?.scrollToMessage?.(entry.id);
           return;
         }
         const timelineCursor = useSessionStore

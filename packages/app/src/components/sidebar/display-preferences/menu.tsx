@@ -112,7 +112,11 @@ const TRAILING_LABEL_KEYS: Record<SidebarTrailingChoice, string> = {
  * shape is deliberate — every option of every decision on one surface is what this menu used to
  * be, and it grew a row for each host on top of that.
  */
-export function SidebarDisplayPreferencesMenu(): ReactElement {
+export function SidebarDisplayPreferencesMenu({
+  circular = false,
+}: {
+  circular?: boolean;
+}): ReactElement {
   const { t } = useTranslation();
   const preferences = useSidebarDisplayPreferences();
   const hosts = useHosts();
@@ -120,9 +124,10 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
   const triggerStyle = useCallback(
     ({ hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.trigger,
+      circular && styles.triggerCircular,
       hovered && styles.triggerHovered,
     ],
-    [],
+    [circular],
   );
 
   const showHostFilter = hosts.length > 1;
@@ -182,7 +187,7 @@ export function SidebarDisplayPreferencesMenu(): ReactElement {
         accessibilityLabel={t("sidebar.display.trigger")}
         testID="sidebar-display-preferences-menu"
       >
-        <ThemedSettings2 size={14} uniProps={mutedIconMapping} />
+        <ThemedSettings2 size={circular ? 20 : 14} uniProps={mutedIconMapping} />
       </MenuTrigger>
       <MenuSurface
         align="end"
@@ -422,6 +427,12 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,
+  },
+  triggerCircular: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface3,
   },
   triggerHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,

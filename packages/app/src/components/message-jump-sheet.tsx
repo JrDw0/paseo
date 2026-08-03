@@ -204,6 +204,7 @@ export function MessageJumpSheet({
   return (
     <IsolatedBottomSheetModal
       ref={sheetRef}
+      contextBridge={null}
       snapPoints={snapPoints}
       index={0}
       enableDynamicSizing={false}

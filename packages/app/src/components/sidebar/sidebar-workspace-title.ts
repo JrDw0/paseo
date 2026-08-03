@@ -11,7 +11,7 @@ export function resolveSidebarWorkspacePrimaryLabel(input: {
   // A real SidebarWorkspaceEntry always has `title` (the user-set name); the
   // accessibility label composes over a narrower Pick where it may be absent,
   // so it's optional here and simply means "no user title".
-  workspace: Pick<SidebarWorkspaceEntry, "name" | "currentBranch"> & { title?: string | null };
+  workspace: Pick<SidebarWorkspaceEntry, "name"> & { title?: string | null };
   agentTitle?: string | null;
 }): string {
   if (input.workspace.title) {

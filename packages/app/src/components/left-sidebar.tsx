@@ -8,7 +8,6 @@ import {
   Search,
   Server,
   Settings,
-  X,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
@@ -69,11 +68,11 @@ import {
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
-import { SidebarImportRecentButton } from "./sidebar/sidebar-import-recent-button";
 import {
-  SidebarFilterTextProvider,
-  useSidebarFilterText,
-} from "./sidebar/sidebar-workspace-list-context";
+  SidebarImportRecentButton,
+  MobileSidebarImportButton,
+} from "./sidebar/sidebar-import-recent-button";
+import { SidebarFilterTextProvider } from "./sidebar/sidebar-workspace-list-context";
 import { SidebarWorkspaceList } from "./sidebar-workspace-list";
 
 type SidebarTheme = ReturnType<typeof useUnistyles>["theme"];
@@ -110,6 +109,7 @@ interface SidebarLabels {
   searchHosts: string;
   sessions: string;
   schedules: string;
+  importSession: string;
   closeSidebar: string;
 }
 
@@ -119,6 +119,8 @@ interface MobileSidebarProps extends SidebarSharedProps {
   closeSidebar: () => void;
   handleViewMoreNavigate: () => void;
   handleViewSchedulesNavigate: () => void;
+  filterText: string;
+  setFilterText: (text: string) => void;
 }
 
 interface DesktopSidebarProps extends SidebarSharedProps {
@@ -234,6 +236,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
       searchHosts: t("sidebar.host.searchPlaceholder"),
       sessions: t("sidebar.sections.sessions"),
       schedules: t("sidebar.sections.schedules"),
+      importSession: t("sidebar.actions.importRecentSessions"),
       closeSidebar: t("sidebar.actions.closeSidebar"),
     }),
     [t],
@@ -273,6 +276,8 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
             handleOpenHostSettings={handleOpenHostSettingsMobile}
             handleViewMoreNavigate={handleViewMoreNavigate}
             handleViewSchedulesNavigate={handleViewSchedulesNavigate}
+            filterText={filterText}
+            setFilterText={setFilterText}
           />
         </RetainedPanelActivity>
       </SidebarFilterTextProvider>
@@ -540,6 +545,7 @@ function SidebarFooter({
   labels,
   handleAddHost,
   handleOpenHostSettings,
+  variant = "desktop",
 }: {
   theme: SidebarTheme;
   handleOpenProject: () => void;
@@ -554,9 +560,16 @@ function SidebarFooter({
   };
   handleAddHost: () => void;
   handleOpenHostSettings: (serverId: string) => void;
+  variant?: "desktop" | "mobile";
 }) {
   const newAgentKeys = useShortcutKeys("new-agent");
   const settingsKeys = useShortcutKeys("toggle-settings");
+
+  // Mobile: the footer is only the two big CTA buttons (Import / New workspace).
+  // The navigation icons (home/hosts/settings/help) move to the mobile top row.
+  if (variant === "mobile") {
+    return null;
+  }
 
   return (
     <View style={styles.sidebarFooter}>
@@ -608,18 +621,17 @@ function MobileSidebar({
   shortcutIndexByWorkspaceKey,
   toggleProjectCollapsed,
   handleRefresh,
-  newWorkspaceKeys,
   handleOpenProject,
   handleHome,
   handleSettings,
   labels,
-  handleAddHost,
-  handleOpenHostSettings,
   insetsTop,
   insetsBottom,
   closeSidebar,
   handleViewMoreNavigate,
   handleViewSchedulesNavigate,
+  filterText,
+  setFilterText,
 }: MobileSidebarProps) {
   const pathname = usePathname();
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
@@ -627,6 +639,7 @@ function MobileSidebar({
   const isSchedulesActive = pathname.includes("/schedules");
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
   const dragGestureHostPresented = useIsMobilePanelPresented("agent-list");
+  const [isFilterInputVisible, setIsFilterInputVisible] = useState(false);
 
   const handleViewMore = useCallback(() => {
     closeSidebar();
@@ -638,8 +651,37 @@ function MobileSidebar({
     handleViewSchedulesNavigate();
   }, [closeSidebar, handleViewSchedulesNavigate]);
 
+  const handleToggleFilterInput = useCallback(() => {
+    setIsFilterInputVisible((current) => {
+      if (current) {
+        setFilterText("");
+      }
+      return !current;
+    });
+  }, [setFilterText]);
+
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
+  }, [closeSidebar]);
+
+  const handleSettingsPress = useCallback(() => {
+    closeSidebar();
+    handleSettings();
+  }, [closeSidebar, handleSettings]);
+
+  const handleHomePress = useCallback(() => {
+    closeSidebar();
+    handleHome();
+  }, [closeSidebar, handleHome]);
+
+  const handleAddProjectPress = useCallback(() => {
+    closeSidebar();
+    handleOpenProject();
+  }, [closeSidebar, handleOpenProject]);
+
+  const handleNewWorkspace = useCallback(() => {
+    closeSidebar();
+    router.push(buildNewWorkspaceRoute());
   }, [closeSidebar]);
 
   const mobileSidebarInsetStyle = useMemo(
@@ -651,6 +693,8 @@ function MobileSidebar({
     [insetsTop, insetsBottom, theme.colors.surfaceSidebar],
   );
 
+  const showFilterInput = isFilterInputVisible || filterText.length > 0;
+
   return (
     <MobilePanelOverlay
       panel="agent-list"
@@ -659,50 +703,72 @@ function MobileSidebar({
     >
       <View style={styles.sidebarContent} pointerEvents="auto">
         <WindowChromeSafeArea placement="below" />
-        <View style={styles.sidebarHeaderGroup}>
-          <SidebarNewWorkspaceHeaderRow
-            label={labels.newWorkspace}
-            testID="sidebar-global-new-workspace"
-            variant="compact"
-            shortcutKeys={newWorkspaceKeys}
-            onBeforeNavigate={closeSidebar}
+
+        {/* Top nav row: circular icon buttons (settings/home/add-project) + filter toggle */}
+        <View style={styles.mobileTopNavRow}>
+          <MobileNavIconButton
+            icon={Settings}
+            label={labels.settings}
+            onPress={handleSettingsPress}
+            size={48}
+            testID="sidebar-mobile-settings"
           />
-          <SidebarHeaderRow
+          <MobileNavIconButton
+            icon={Home}
+            label={labels.home}
+            onPress={handleHomePress}
+            size={48}
+            testID="sidebar-mobile-home"
+          />
+          <MobileNavIconButton
+            icon={FolderPlus}
+            label={labels.addProject}
+            onPress={handleAddProjectPress}
+            size={48}
+            testID="sidebar-mobile-add-project"
+          />
+          <View style={styles.mobileTopNavSpacer} />
+          <MobileNavIconButton
+            icon={Search}
+            label={labels.searchHosts}
+            onPress={handleToggleFilterInput}
+            active={showFilterInput}
+            size={48}
+            testID="sidebar-mobile-filter-toggle"
+          />
+        </View>
+
+        {showFilterInput ? (
+          <View style={styles.mobileFilterRow}>
+            <MobileFilterInput
+              filterText={filterText}
+              setFilterText={setFilterText}
+              theme={theme}
+            />
+          </View>
+        ) : null}
+
+        {/* Secondary shortcuts: history / schedules as circular icon buttons + prefs */}
+        <View style={styles.mobileSecondaryRow}>
+          <MobileNavIconButton
             icon={History}
             label={labels.sessions}
             onPress={handleViewMore}
-            isActive={isSessionsActive}
+            active={isSessionsActive}
+            size={44}
             testID="sidebar-sessions"
-            variant="compact"
           />
-          <SidebarHeaderRow
+          <MobileNavIconButton
             icon={CalendarClock}
             label={labels.schedules}
             onPress={handleViewSchedules}
-            isActive={isSchedulesActive}
+            active={isSchedulesActive}
+            size={44}
             testID="sidebar-schedules"
-            variant="compact"
           />
+          <View style={styles.mobileTopNavSpacer} />
+          <SidebarDisplayPreferencesMenu circular />
         </View>
-        <WindowChromeSafeArea placement="inline" style={styles.mobileCloseButtonRow}>
-          <Pressable
-            style={styles.mobileCloseButton}
-            onPress={closeSidebar}
-            testID="sidebar-close"
-            nativeID="sidebar-close"
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel={labels.closeSidebar}
-            hitSlop={8}
-          >
-            {({ hovered, pressed }) => (
-              <X
-                size={theme.iconSize.md}
-                color={hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted}
-              />
-            )}
-          </Pressable>
-        </WindowChromeSafeArea>
 
         {isInitialLoad && !hasActiveHostFilter ? (
           <SidebarAgentListSkeleton />
@@ -726,17 +792,105 @@ function MobileSidebar({
           />
         )}
 
-        <SidebarFooter
-          theme={theme}
-          handleOpenProject={handleOpenProject}
-          handleHome={handleHome}
-          handleSettings={handleSettings}
-          labels={labels}
-          handleAddHost={handleAddHost}
-          handleOpenHostSettings={handleOpenHostSettings}
-        />
+        {/* Footer: circular thumb-reach actions — import on the left, new-workspace FAB on the right */}
+        <View style={styles.mobileFooter}>
+          <MobileSidebarImportButton onBeforeNavigate={closeSidebar} />
+          <MobileNavIconButton
+            icon={Plus}
+            label={labels.newWorkspace}
+            onPress={handleNewWorkspace}
+            size={56}
+            accent
+            testID="sidebar-footer-new-workspace"
+          />
+        </View>
       </View>
     </MobilePanelOverlay>
+  );
+}
+
+// Native-style circular action button. The single reusable shape for the mobile
+// sidebar chrome: filled circle, bigger than the desktop text buttons, no label.
+function MobileNavIconButton({
+  icon: Icon,
+  label,
+  onPress,
+  testID,
+  active = false,
+  disabled = false,
+  accent = false,
+  size = 40,
+}: {
+  icon: typeof Settings;
+  label: string;
+  onPress: () => void;
+  testID: string;
+  active?: boolean;
+  disabled?: boolean;
+  accent?: boolean;
+  size?: number;
+}) {
+  const { theme } = useUnistyles();
+  const style = useCallback(
+    ({ pressed }: PressableStateCallbackType) => [
+      styles.mobileCircleButton,
+      { width: size, height: size },
+      accent && styles.mobileCircleButtonAccent,
+      active && !accent && styles.mobileCircleButtonActive,
+      pressed && styles.mobileCircleButtonPressed,
+      disabled && styles.mobileNavIconButtonDisabled,
+    ],
+    [active, accent, disabled, size],
+  );
+  const iconSize = size >= 48 ? theme.iconSize.lg : theme.iconSize.md;
+  let iconColor = active ? theme.colors.foreground : theme.colors.foregroundMuted;
+  if (accent) {
+    iconColor = theme.colors.accentForeground;
+  }
+  return (
+    <Pressable
+      style={style}
+      onPress={onPress}
+      testID={testID}
+      disabled={disabled}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={6}
+    >
+      <Icon size={iconSize} color={iconColor} />
+    </Pressable>
+  );
+}
+
+function MobileFilterInput({
+  filterText,
+  setFilterText,
+  theme,
+}: {
+  filterText: string;
+  setFilterText: (text: string) => void;
+  theme: SidebarTheme;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.mobileFilterField}>
+      <Search size={12} color={theme.colors.foregroundMuted} />
+      <TextInput
+        value={filterText}
+        onChangeText={setFilterText}
+        placeholder={t("sidebar.filter.placeholder")}
+        placeholderTextColor={theme.colors.foregroundMuted}
+        accessibilityLabel={t("sidebar.filter.placeholder")}
+        testID="sidebar-workspace-filter-input"
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        clearButtonMode="while-editing"
+        style={styles.mobileFilterInput}
+        autoFocus
+      />
+    </View>
   );
 }
 
@@ -911,33 +1065,6 @@ function DesktopSidebar({
   );
 }
 
-function SidebarWorkspacesFilterInput() {
-  const { theme } = useUnistyles();
-  const { t } = useTranslation();
-  const filterContext = useSidebarFilterText();
-  if (!filterContext) {
-    return null;
-  }
-  return (
-    <View style={styles.workspacesFilterField}>
-      <Search size={12} color={theme.colors.foregroundMuted} />
-      <TextInput
-        value={filterContext.filterText}
-        onChangeText={filterContext.setFilterText}
-        placeholder={t("sidebar.filter.placeholder")}
-        placeholderTextColor={theme.colors.foregroundMuted}
-        accessibilityLabel={t("sidebar.filter.placeholder")}
-        testID="sidebar-workspace-filter-input"
-        autoCapitalize="none"
-        autoCorrect={false}
-        returnKeyType="search"
-        clearButtonMode="while-editing"
-        style={styles.workspacesFilterInput}
-      />
-    </View>
-  );
-}
-
 function WorkspacesSectionHeader() {
   const { theme } = useUnistyles();
   const isCompactLayout = useIsCompactFormFactor();
@@ -952,39 +1079,44 @@ function WorkspacesSectionHeader() {
     [],
   );
 
+  // On compact the workspace list header is a plain label. Search/filter,
+  // import-recent, and display preferences moved into the sidebar's top nav
+  // and secondary rows so the header stays single-line.
+  if (isCompactLayout) {
+    return (
+      <View style={styles.workspacesSectionHeader}>
+        <Text style={styles.workspacesSectionTitle}>Workspaces</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.workspacesSectionHeader}>
       <Text style={styles.workspacesSectionTitle}>Workspaces</Text>
       <View style={styles.workspacesSectionActions}>
-        {isCompactLayout ? (
-          // On compact screens the magnifier grows into an inline filter; the
-          // command center stays one shortcut away from the docked search icon.
-          <SidebarWorkspacesFilterInput />
-        ) : (
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open command center"
-                testID="sidebar-command-center-search"
-                style={searchButtonStyle}
-                onPress={handleSearchPress}
-              >
-                {({ hovered, pressed }) => (
-                  <Search
-                    size={14}
-                    color={
-                      hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
-                    }
-                  />
-                )}
-              </Pressable>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="center" offset={8}>
-              <IconTooltipContent label="Search" shortcutKeys={commandCenterKeys} />
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open command center"
+              testID="sidebar-command-center-search"
+              style={searchButtonStyle}
+              onPress={handleSearchPress}
+            >
+              {({ hovered, pressed }) => (
+                <Search
+                  size={14}
+                  color={
+                    hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
+                  }
+                />
+              )}
+            </Pressable>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            <IconTooltipContent label="Search" shortcutKeys={commandCenterKeys} />
+          </TooltipContent>
+        </Tooltip>
         <SidebarImportRecentButton />
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
@@ -1086,25 +1218,78 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minHeight: 0,
   },
-  mobileCloseButtonRow: {
-    position: "absolute",
-    top: theme.spacing[3],
-    left: 0,
-    right: 0,
-    zIndex: 2,
-    alignItems: "flex-end",
-    pointerEvents: "box-none",
+  mobileTopNavRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[3],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
-  mobileCloseButton: {
-    // The 16px X paints farther inside its 32px hit target than the 14px Settings2 glyph.
-    // This optical inset puts their painted right edges on the same sidebar rail.
-    marginRight: theme.spacing[2] + 1.5,
-    width: 32,
-    height: 32,
+  mobileFilterRow: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  mobileSecondaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  mobileFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  mobileCircleButton: {
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface3,
+  },
+  mobileCircleButtonAccent: {
+    backgroundColor: theme.colors.accent,
+  },
+  mobileCircleButtonActive: {
+    backgroundColor: theme.colors.accentBright,
+  },
+  mobileCircleButtonPressed: {
+    opacity: 0.82,
+  },
+  mobileNavIconButtonDisabled: {
+    opacity: 0.4,
+  },
+  mobileTopNavSpacer: {
+    flex: 1,
+  },
+  mobileFilterField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    flex: 1,
+    height: 36,
+    paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surfaceSidebar,
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  mobileFilterInput: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
   },
   desktopSidebarBorder: {
     borderRightWidth: 1,
