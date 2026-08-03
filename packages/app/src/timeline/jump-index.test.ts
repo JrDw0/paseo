@@ -39,29 +39,37 @@ describe("buildJumpIndexFromTimeline", () => {
         nonUser({ seq: 3, type: "reasoning" }),
         userMessage({ seq: 4, text: "second ask" }),
       ],
+      epoch: "epoch-1",
       formatTimestamp: () => "now",
       imageMessagePreview: "[image]",
     });
 
     expect(index).toEqual([
-      { id: "seq:2", seq: 2, preview: "first ask", timestampLabel: "now" },
-      { id: "seq:4", seq: 4, preview: "second ask", timestampLabel: "now" },
+      { id: "seq:2", epoch: "epoch-1", seq: 2, preview: "first ask", timestampLabel: "now" },
+      { id: "seq:4", epoch: "epoch-1", seq: 4, preview: "second ask", timestampLabel: "now" },
     ]);
   });
 
   test("uses messageId as the jump id when present", () => {
     const index = buildJumpIndexFromTimeline({
       entries: [userMessage({ seq: 10, text: "hi", messageId: "msg-1" })],
+      epoch: "epoch-1",
       formatTimestamp: () => "now",
       imageMessagePreview: "[image]",
     });
 
-    expect(index[0]).toMatchObject({ id: "msg-1", seq: 10, preview: "hi" });
+    expect(index[0]).toMatchObject({
+      id: "msg-1",
+      epoch: "epoch-1",
+      seq: 10,
+      preview: "hi",
+    });
   });
 
   test("uses the first non-empty trimmed line as the preview", () => {
     const index = buildJumpIndexFromTimeline({
       entries: [userMessage({ seq: 5, text: "  \n  Hello world  \n second line" })],
+      epoch: "epoch-1",
       formatTimestamp: () => "now",
       imageMessagePreview: "[image]",
     });
@@ -72,6 +80,7 @@ describe("buildJumpIndexFromTimeline", () => {
   test("falls back to the image placeholder for blank user messages", () => {
     const index = buildJumpIndexFromTimeline({
       entries: [userMessage({ seq: 7, text: "  \n  \n" })],
+      epoch: "epoch-1",
       formatTimestamp: () => "now",
       imageMessagePreview: "[image]",
     });
@@ -82,6 +91,7 @@ describe("buildJumpIndexFromTimeline", () => {
   test("propagates the formatted timestamp", () => {
     const index = buildJumpIndexFromTimeline({
       entries: [userMessage({ seq: 9, text: "hello" })],
+      epoch: "epoch-1",
       formatTimestamp: () => "5 min ago",
       imageMessagePreview: "[image]",
     });

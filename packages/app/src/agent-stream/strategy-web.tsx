@@ -15,6 +15,7 @@ import { useStableEvent } from "@/hooks/use-stable-event";
 import type { Theme } from "@/styles/theme";
 import { WEB_SCROLLBAR_SIZE_PX } from "@/styles/web-scrollbar";
 import { estimateStreamItemHeight } from "./web-virtualization";
+import { DESKTOP_FLOATING_ACTIONS_CLEARANCE } from "./floating-actions-layout";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
 import { createStreamStrategy } from "./strategy";
 import {
@@ -1063,8 +1064,11 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       minHeight: "100%",
       paddingTop: CONTENT_PADDING_TOP_PX,
       paddingBottom: 16,
-      paddingLeft: isMobileBreakpoint ? 8 : 16,
-      paddingRight: isMobileBreakpoint ? 8 : 16,
+      // The desktop action stack is overlaid at the trailing edge. Mirror its
+      // clearance on both sides so narrower panes keep messages centered and
+      // leave the controls outside the message rail.
+      paddingLeft: isMobileBreakpoint ? 8 : DESKTOP_FLOATING_ACTIONS_CLEARANCE,
+      paddingRight: isMobileBreakpoint ? 8 : DESKTOP_FLOATING_ACTIONS_CLEARANCE,
       boxSizing: "border-box",
     };
   }, [isMobileBreakpoint]);

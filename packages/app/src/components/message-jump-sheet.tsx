@@ -1,8 +1,10 @@
-import { useCallback, useMemo, type ComponentProps, type ReactElement } from "react";
+import React, { useCallback, useMemo, type ComponentProps, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  FlatList,
   Pressable,
   Text,
+  useWindowDimensions,
   View,
   type ListRenderItemInfo,
   type PressableStateCallbackType,
@@ -16,6 +18,8 @@ import {
 } from "@gorhom/bottom-sheet";
 import { Image as ImageIcon, X } from "lucide-react-native";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import {
   IsolatedBottomSheetModal,
   useIsolatedBottomSheetVisibility,
@@ -34,6 +38,7 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
  */
 export interface MessageJumpEntry {
   id: string;
+  epoch: string;
   seq: number;
   preview: string;
   timestampLabel: string;
@@ -59,14 +64,20 @@ function MessageJumpSheetBackground({ style }: BottomSheetBackgroundProps) {
 function MessageJumpRow({
   entry,
   onSelect,
+  desktop = false,
 }: {
   entry: MessageJumpEntry;
   onSelect: (entry: MessageJumpEntry) => void;
+  desktop?: boolean;
 }) {
   const handlePress = useCallback(() => onSelect(entry), [entry, onSelect]);
   const rowStyle = useCallback(
-    ({ pressed }: PressableStateCallbackType) => [styles.row, pressed && styles.rowPressed],
-    [],
+    ({ pressed, hovered }: PressableStateCallbackType) => [
+      styles.row,
+      desktop && styles.rowDesktop,
+      (pressed || hovered) && styles.rowActive,
+    ],
+    [desktop],
   );
   return (
     <Pressable
@@ -99,6 +110,8 @@ export function MessageJumpSheet({
   onClose,
 }: MessageJumpSheetProps) {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
+  const { height: viewportHeight } = useWindowDimensions();
   const snapPoints = useMemo(() => ["40%", "70%"], []);
 
   const { sheetRef, handleSheetChange, handleSheetDismiss } = useIsolatedBottomSheetVisibility({
@@ -115,9 +128,18 @@ export function MessageJumpSheet({
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<MessageJumpEntry>): ReactElement => (
-      <MessageJumpRow entry={item} onSelect={onSelect} />
+      <MessageJumpRow entry={item} onSelect={onSelect} desktop={!isCompact} />
     ),
-    [onSelect],
+    [isCompact, onSelect],
+  );
+
+  const desktopHeader = useMemo<SheetHeader>(
+    () => ({ title: t("agentStream.messageJump.title") }),
+    [t],
+  );
+  const desktopListHeight = useMemo(
+    () => Math.min(560, Math.max(280, Math.round(viewportHeight * 0.65))),
+    [viewportHeight],
   );
 
   const header = useMemo(
@@ -152,6 +174,32 @@ export function MessageJumpSheet({
     ),
     [loading, t],
   );
+
+  if (!isCompact) {
+    return (
+      <AdaptiveModalSheet
+        header={desktopHeader}
+        visible={visible}
+        onClose={onClose}
+        desktopMaxWidth={560}
+        scrollable={false}
+        contentStyle={styles.desktopBody}
+        testID="message-jump-dialog"
+      >
+        <View style={[styles.desktopListViewport, { height: desktopListHeight }]}>
+          <FlatList
+            data={entries}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+            ListEmptyComponent={emptyState}
+            testID="message-jump-desktop-list"
+          />
+        </View>
+      </AdaptiveModalSheet>
+    );
+  }
 
   return (
     <IsolatedBottomSheetModal
@@ -213,7 +261,12 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[3],
     gap: theme.spacing[1],
   },
-  rowPressed: {
+  rowDesktop: {
+    minHeight: 62,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderAccent,
+  },
+  rowActive: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   rowText: {
@@ -236,5 +289,13 @@ const styles = StyleSheet.create((theme) => ({
   emptyText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
+  },
+  desktopBody: {
+    padding: 0,
+    gap: 0,
+  },
+  desktopListViewport: {
+    minHeight: 0,
+    overflow: "hidden",
   },
 }));

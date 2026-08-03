@@ -20,6 +20,7 @@ import {
 } from "@/timeline/session-stream-reducers";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { isTimelineResumeSnapshotAuthoritative } from "@/timeline/timeline-sync-plan";
+import { consumeMessageJumpTimelineResponse } from "@/timeline/message-jump-timeline-request";
 import {
   createViewedTimelineSync,
   type TimelineDeliveryMode,
@@ -773,6 +774,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
     const unsubAgentTimeline = client.on("fetch_agent_timeline_response", (message) => {
       if (message.type !== "fetch_agent_timeline_response") return;
+      if (consumeMessageJumpTimelineResponse(message.payload.requestId)) return;
       agentStreamReducerQueue.flushAgent(message.payload.agentId);
       applyTimelineResponse(message.payload);
     });

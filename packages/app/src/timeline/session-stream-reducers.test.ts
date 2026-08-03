@@ -435,6 +435,25 @@ describe("processTimelineResponse", () => {
     expect(result.cursor).toEqual({ epoch: "epoch-1", startSeq: 1, endSeq: 10 });
   });
 
+  it("preserves the canonical cursor on a projected user message", () => {
+    const result = processTimelineResponse({
+      ...baseTimelineInput,
+      payload: {
+        ...baseTimelineInput.payload,
+        epoch: "timeline-1",
+        entries: [makeTimelineEntry(40, "older question", "user_message", 42)],
+      },
+    });
+
+    expect(result.tail).toEqual([
+      expect.objectContaining({
+        kind: "user_message",
+        text: "older question",
+        timelineCursor: { epoch: "timeline-1", seq: 40 },
+      }),
+    ]);
+  });
+
   it("preserves the canonical end cursor on a projected assistant message", () => {
     const result = processTimelineResponse({
       ...baseTimelineInput,

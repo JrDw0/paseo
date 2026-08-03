@@ -6,7 +6,7 @@ import {
   driveJumpBackfill,
   planJumpBackfill,
 } from "./jump-backfill";
-import { decideMessageJump } from "./jump-decision";
+import { decideMessageJump, findLoadedMessageJumpTarget } from "./jump-decision";
 import type { JumpIndexEntry } from "@/timeline/jump-index";
 import { TIMELINE_FETCH_PAGE_SIZE } from "@/timeline/timeline-fetch-policy";
 
@@ -80,11 +80,29 @@ describe("driveJumpBackfill", () => {
     };
   }
 
-  test("stops immediately when the span already covers the target", async () => {
+  test("fetches a target window when cursor coverage does not prove the row is rendered", async () => {
     const h = harness({ startSeq: 5, targetSeq: 10 });
     await h.run();
-    expect(h.fetched).toEqual([]);
+    expect(h.fetched).toEqual([{ seq: 11, limit: TIMELINE_FETCH_PAGE_SIZE }]);
     expect(h.covered()).toBe(1);
+  });
+
+  test("fetches a target window when no local timeline cursor exists", async () => {
+    let covered = 0;
+    const fetched: number[] = [];
+    await driveJumpBackfill({
+      targetSeq: 10,
+      readStartSeq: () => Number.POSITIVE_INFINITY,
+      readEpoch: () => "epoch-1",
+      fetchPage: async (request) => {
+        fetched.push(request.cursor.seq);
+      },
+      onCovered: () => {
+        covered += 1;
+      },
+    });
+    expect(fetched).toEqual([11]);
+    expect(covered).toBe(1);
   });
 
   test("pages continuously until the span covers the target", async () => {
@@ -104,10 +122,28 @@ describe("driveJumpBackfill", () => {
     expect(windowFetch).toBeDefined();
     expect(h.covered()).toBe(1);
   });
+
+  test("stops when a page does not widen the loaded history span", async () => {
+    await expect(
+      driveJumpBackfill({
+        targetSeq: 1,
+        readStartSeq: () => 10,
+        readEpoch: () => "epoch-1",
+        fetchPage: async () => undefined,
+        onCovered: () => {},
+      }),
+    ).rejects.toThrow("Timeline backfill made no progress");
+  });
 });
 
 describe("decideMessageJump", () => {
-  const entry: JumpIndexEntry = { id: "m1", seq: 10, preview: "hi", timestampLabel: "now" };
+  const entry: JumpIndexEntry = {
+    id: "m1",
+    epoch: "epoch-1",
+    seq: 10,
+    preview: "hi",
+    timestampLabel: "now",
+  };
 
   test("scrolls when the target seq is already inside the rendered span", () => {
     expect(decideMessageJump(entry, { isSeqCovered: () => true })).toEqual({
@@ -121,5 +157,22 @@ describe("decideMessageJump", () => {
       kind: "load-until",
       entry,
     });
+  });
+
+  test("resolves an old user message through its timeline sequence", () => {
+    expect(
+      findLoadedMessageJumpTarget(
+        [
+          {
+            kind: "user_message",
+            id: "generated-user-id",
+            text: "older message",
+            timestamp: new Date(),
+            timelineCursor: { epoch: "epoch-1", seq: 10 },
+          },
+        ],
+        entry,
+      ),
+    ).toBe("generated-user-id");
   });
 });

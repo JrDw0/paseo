@@ -1,4 +1,5 @@
 import type { JumpIndexEntry } from "@/timeline/jump-index";
+import type { StreamItem } from "@/types/stream";
 
 /**
  * Decide what a jump to a target message requires given which part of the
@@ -28,4 +29,23 @@ export function decideMessageJump(entry: JumpIndexEntry, ctx: JumpLoadedContext)
     return { kind: "scroll", entry };
   }
   return { kind: "load-until", entry };
+}
+
+/** Resolve the index row to its actual rendered user-message item. */
+export function findLoadedMessageJumpTarget(
+  items: readonly StreamItem[],
+  entry: Pick<JumpIndexEntry, "id" | "epoch" | "seq">,
+): string | null {
+  for (const item of items) {
+    if (item.kind !== "user_message") {
+      continue;
+    }
+    if (
+      item.id === entry.id ||
+      (item.timelineCursor?.epoch === entry.epoch && item.timelineCursor.seq === entry.seq)
+    ) {
+      return item.id;
+    }
+  }
+  return null;
 }

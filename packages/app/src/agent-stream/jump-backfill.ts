@@ -100,14 +100,19 @@ export async function driveJumpBackfill(input: {
   } = input;
 
   let state = createJumpBackfillState();
-  while (readStartSeq() > targetSeq) {
-    const decision = planJumpBackfill({
-      state,
-      currentStartSeq: readStartSeq(),
-      targetSeq,
-      maxPages,
-      pageLimit,
-    });
+  let fetchedTargetWindow = false;
+  while (readStartSeq() > targetSeq || !fetchedTargetWindow) {
+    const startSeq = readStartSeq();
+    const decision =
+      !Number.isFinite(startSeq) || startSeq <= targetSeq
+        ? ({ kind: "window", cursorSeq: targetSeq + 1 } as const)
+        : planJumpBackfill({
+            state,
+            currentStartSeq: startSeq,
+            targetSeq,
+            maxPages,
+            pageLimit,
+          });
     if (decision.kind === "done") {
       break;
     }
@@ -118,6 +123,13 @@ export async function driveJumpBackfill(input: {
       limit: cursor.limit,
     });
     state = advanceJumpBackfillState(state, decision);
+    if (decision.kind === "window") {
+      fetchedTargetWindow = true;
+      break;
+    }
+    if (readStartSeq() >= startSeq) {
+      throw new Error("Timeline backfill made no progress");
+    }
   }
   onCovered();
 }
