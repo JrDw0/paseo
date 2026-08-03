@@ -32,7 +32,7 @@ describe("buildAgentAttentionNotificationPayload", () => {
     });
 
     expect(payload).toEqual({
-      title: "Agent finished",
+      title: "Agent 已完成",
       body: "Done. Updated README.md and link.",
       data: {
         serverId: "srv-1",
@@ -60,7 +60,7 @@ describe("buildAgentAttentionNotificationPayload", () => {
     });
 
     expect(payload).toEqual({
-      title: "Agent needs permission",
+      title: "Agent 需要权限",
       body: "Approve command - Run git push",
       data: {
         serverId: "srv-2",
@@ -80,8 +80,8 @@ describe("buildAgentAttentionNotificationPayload", () => {
     });
 
     expect(payload).toEqual({
-      title: "Agent needs attention",
-      body: "Encountered an error.",
+      title: "Agent 需要处理",
+      body: "遇到了错误。",
       data: {
         serverId: "srv-3",
         workspaceId: "workspace-3",
