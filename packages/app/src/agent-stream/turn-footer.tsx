@@ -216,6 +216,11 @@ const stylesheet = StyleSheet.create((theme) => ({
     width: "100%",
     maxWidth: MAX_CONTENT_WIDTH,
     alignSelf: "center",
+    // The web stream rows wrap mounted/live items in a block-level div where
+    // alignSelf is a no-op, so the footer needs margin auto to center the same
+    // way the message content rail does (see stylesheet.streamItemWrapper in view.tsx).
+    marginLeft: "auto",
+    marginRight: "auto",
     paddingHorizontal: theme.spacing[2],
   },
   turnFooterRow: {
