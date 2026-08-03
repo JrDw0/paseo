@@ -76,12 +76,28 @@ function HostVersionHint({ host }: { host: HostProfile }) {
   );
 }
 
-export function SidebarHelpMenu() {
+export function SidebarHelpMenu({
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+} = {}) {
   const { t } = useTranslation();
   const isCompactLayout = useIsCompactFormFactor();
   const openAppDiagnostic = useAppDiagnosticStore((state) => state.open);
   const setShortcutsDialogOpen = useKeyboardShortcutsStore((state) => state.setShortcutsDialogOpen);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setInternalOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [onOpenChange],
+  );
   const showKeyboardShortcuts = !isNative && !isCompactLayout;
   const version = formatVersionWithPrefix(resolveAppVersion());
   const hosts = useHosts();
@@ -103,12 +119,12 @@ export function SidebarHelpMenu() {
   }, []);
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <Tooltip delayDuration={300} enabledOnDesktop={!open}>
         <TooltipTrigger asChild>
           <View>
             <DropdownMenuTrigger
-              style={styles.trigger}
+              style={[styles.trigger, hideTrigger && styles.hiddenTrigger]}
               testID="sidebar-help"
               accessibilityRole="button"
               accessibilityLabel={t("sidebar.help.trigger")}
@@ -189,6 +205,12 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[1],
+  },
+  hiddenTrigger: {
+    opacity: 0,
+    position: "absolute",
+    left: 0,
+    top: 0,
   },
   tooltipText: {
     fontSize: theme.fontSize.sm,

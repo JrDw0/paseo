@@ -29,6 +29,8 @@ import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sideba
 import { useSidebarRowAgentMeta } from "@/components/sidebar/sidebar-workspace-list-context";
 import { getProviderIcon } from "@/components/provider-icons";
 import { formatTimeAgo } from "@/utils/time";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import { DiffStat } from "@/components/diff-stat";
 
 const DEFAULT_STATUS_DOT_SIZE = 7;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
@@ -93,6 +95,9 @@ export function SidebarWorkspaceRowFrame({
   );
 }
 
+// The row owns both desktop and compact metadata because the same selection and hover rails must
+// stay aligned across project and status grouping.
+// oxlint-disable-next-line complexity
 export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowContent({
   workspace,
   subtitle,
@@ -123,6 +128,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   children?: ReactNode;
 }) {
   const agentMeta = useSidebarRowAgentMeta(workspace.serverId, workspace.workspaceId);
+  const isCompact = useIsCompactFormFactor();
   const workspaceLabel = resolveSidebarWorkspacePrimaryLabel({
     workspace,
     agentTitle: agentMeta?.agentTitle ?? null,
@@ -136,6 +142,63 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     ],
     [scriptIconKind, isHovered, isCreating],
   );
+  const { t } = useTranslation();
+  const statusLabelKey = {
+    needs_input: "needsInput",
+    failed: "failed",
+    attention: "attention",
+    running: "running",
+    done: "done",
+  }[workspace.statusBucket];
+  const statusLabel = t(`sidebar.workspace.status.${statusLabelKey}`);
+  let secondaryContent: ReactNode = null;
+  if (isCompact) {
+    secondaryContent = (
+      <View style={styles.workspaceCompactMetadataRow}>
+        <Text style={styles.workspaceStatusLabel} numberOfLines={1}>
+          {statusLabel}
+        </Text>
+        {subtitleProjectName ? (
+          <SidebarSubtitleProjectIcon
+            projectViewKey={workspace.projectViewKey}
+            projectName={subtitleProjectName}
+            iconDataUri={subtitleProjectIconDataUri}
+            testID={`sidebar-row-project-icon-${workspace.workspaceKey}`}
+          />
+        ) : null}
+        {subtitle ? (
+          <Text style={styles.workspaceSubtitleCompact} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+        <WorkspaceWorktreeBranchBadge workspace={workspace} compact />
+        {workspace.diffStat ? (
+          <DiffStat
+            additions={workspace.diffStat.additions}
+            deletions={workspace.diffStat.deletions}
+            testID={`sidebar-workspace-diff-${workspace.workspaceKey}`}
+          />
+        ) : null}
+        <WorkspaceAgentActivity meta={agentMeta} compact />
+      </View>
+    );
+  } else if (subtitle) {
+    secondaryContent = (
+      <View style={styles.workspaceSubtitleRow}>
+        {subtitleProjectName ? (
+          <SidebarSubtitleProjectIcon
+            projectViewKey={workspace.projectViewKey}
+            projectName={subtitleProjectName}
+            iconDataUri={subtitleProjectIconDataUri}
+            testID={`sidebar-row-project-icon-${workspace.workspaceKey}`}
+          />
+        ) : null}
+        <Text style={styles.workspaceSubtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.workspaceRowContent}>
@@ -156,26 +219,18 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
               {scriptIconKind ? <WorkspaceScriptIcon kind={scriptIconKind} /> : null}
             </View>
             <View style={[sidebarWorkspaceRowStyles.rowRight, styles.workspaceTitleRowRight]}>
-              <WorkspaceWorktreeBranchBadge workspace={workspace} />
-              <WorkspaceAgentActivity meta={agentMeta} />
-              {children}
+              {isCompact ? (
+                children
+              ) : (
+                <>
+                  <WorkspaceWorktreeBranchBadge workspace={workspace} />
+                  <WorkspaceAgentActivity meta={agentMeta} />
+                  {children}
+                </>
+              )}
             </View>
           </View>
-          {subtitle ? (
-            <View style={styles.workspaceSubtitleRow}>
-              {subtitleProjectName ? (
-                <SidebarSubtitleProjectIcon
-                  projectViewKey={workspace.projectViewKey}
-                  projectName={subtitleProjectName}
-                  iconDataUri={subtitleProjectIconDataUri}
-                  testID={`sidebar-row-project-icon-${workspace.workspaceKey}`}
-                />
-              ) : null}
-              <Text style={styles.workspaceSubtitle} numberOfLines={1}>
-                {subtitle}
-              </Text>
-            </View>
-          ) : null}
+          {secondaryContent}
           {workspace.prHint ? (
             <View style={styles.workspacePrBadgeRow}>
               <PrBadge hint={workspace.prHint} />
@@ -184,7 +239,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
           ) : null}
         </View>
       </View>
-      {showShortcutBadge && shortcutNumber !== null ? (
+      {showShortcutBadge && shortcutNumber !== null && !isCompact ? (
         <View style={styles.shortcutBadgeOverlay} pointerEvents="none">
           <SidebarWorkspaceShortcutBadge number={shortcutNumber} />
         </View>
@@ -201,18 +256,33 @@ function WorkspaceProviderIcon({ meta }: { meta: ReturnType<typeof useSidebarRow
   return <Icon size={12} color={styles.workspaceProviderIcon.color} />;
 }
 
-function WorkspaceAgentActivity({ meta }: { meta: ReturnType<typeof useSidebarRowAgentMeta> }) {
+function WorkspaceAgentActivity({
+  meta,
+  compact = false,
+}: {
+  meta: ReturnType<typeof useSidebarRowAgentMeta>;
+  compact?: boolean;
+}) {
   if (!meta) {
     return null;
   }
   return (
-    <Text style={styles.workspaceAgentActivity} numberOfLines={1}>
+    <Text
+      style={[styles.workspaceAgentActivity, compact && styles.workspaceAgentActivityCompact]}
+      numberOfLines={1}
+    >
       {formatTimeAgo(meta.lastActivityAt)}
     </Text>
   );
 }
 
-function WorkspaceWorktreeBranchBadge({ workspace }: { workspace: SidebarWorkspaceEntry }) {
+function WorkspaceWorktreeBranchBadge({
+  workspace,
+  compact = false,
+}: {
+  workspace: SidebarWorkspaceEntry;
+  compact?: boolean;
+}) {
   // Worktrees are identified by their branch; the general title precedence skips
   // the branch, so surface it as a right-hand chip so the row still says which
   // branch this worktree checks out.
@@ -220,7 +290,10 @@ function WorkspaceWorktreeBranchBadge({ workspace }: { workspace: SidebarWorkspa
     return null;
   }
   return (
-    <View style={styles.workspaceBranchBadge} testID="workspace-worktree-branch-badge">
+    <View
+      style={[styles.workspaceBranchBadge, compact && styles.workspaceBranchBadgeCompact]}
+      testID="workspace-worktree-branch-badge"
+    >
       <ThemedFolderGit2 size={12} uniProps={blueColorMapping} />
       <Text style={styles.workspaceBranchBadgeText} numberOfLines={1}>
         {workspace.currentBranch}
@@ -508,6 +581,10 @@ export const sidebarWorkspaceRowStyles = StyleSheet.create((theme) => ({
     alignItems: "flex-end",
     justifyContent: "flex-start",
   },
+  trailingActionSlotCompact: {
+    minWidth: 36,
+    minHeight: 36,
+  },
   trailingActionOverlay: {
     position: "absolute",
     top: 0,
@@ -523,8 +600,23 @@ export function SidebarWorkspaceShortcutBadge({ number }: { number: number }) {
   );
 }
 
-export function SidebarWorkspaceTrailingActionSlot({ children }: { children: ReactNode }) {
-  return <View style={sidebarWorkspaceRowStyles.trailingActionSlot}>{children}</View>;
+export function SidebarWorkspaceTrailingActionSlot({
+  children,
+  compact = false,
+}: {
+  children: ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        sidebarWorkspaceRowStyles.trailingActionSlot,
+        compact && sidebarWorkspaceRowStyles.trailingActionSlotCompact,
+      ]}
+    >
+      {children}
+    </View>
+  );
 }
 
 export function SidebarWorkspaceTrailingActionBase({
@@ -588,6 +680,11 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 20,
     flexShrink: 0,
   },
+  workspaceAgentActivityCompact: {
+    lineHeight: 16,
+    maxWidth: 52,
+    flexShrink: 1,
+  },
   workspaceBranchBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -606,6 +703,9 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
     lineHeight: 16,
     flexShrink: 1,
+  },
+  workspaceBranchBadgeCompact: {
+    maxWidth: 96,
   },
   shortcutBadgeOverlay: {
     position: "absolute",
@@ -670,6 +770,26 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 14,
     flexShrink: 1,
     minWidth: 0,
+  },
+  workspaceCompactMetadataRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1.5],
+    minWidth: 0,
+    marginTop: theme.spacing[1],
+  },
+  workspaceStatusLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 16,
+    flexShrink: 0,
+  },
+  workspaceSubtitleCompact: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 16,
+    minWidth: 0,
+    flexShrink: 1,
   },
   workspacePrBadgeRow: {
     flexDirection: "row",

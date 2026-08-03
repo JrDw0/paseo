@@ -691,12 +691,13 @@ function WorkspaceRowRightGroup({
 }) {
   const workspacePath = workspace.workspaceDirectory ?? workspace.projectRootPath;
   const { t } = useTranslation();
-  const showShortcut = showShortcutBadge && shortcutNumber !== null;
-  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
+  const isCompact = useIsCompactFormFactor();
+  const showShortcut = showShortcutBadge && shortcutNumber !== null && !isCompact;
+  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform || isCompact));
   const showKebabInSlot = showKebab && !showShortcut;
   const showDiffStat = shouldShowSidebarWorkspaceDiffStat({
     hasDiffStat: Boolean(workspace.diffStat),
-    isTouchPlatform,
+    isCompact,
   });
   const shouldRenderActionSlot = Boolean(onArchive || showDiffStat);
 
@@ -706,7 +707,7 @@ function WorkspaceRowRightGroup({
         <Text style={styles.workspaceCreatingText}>{t("sidebar.workspace.status.creating")}</Text>
       ) : null}
       {shouldRenderActionSlot ? (
-        <SidebarWorkspaceTrailingActionSlot>
+        <SidebarWorkspaceTrailingActionSlot compact={isCompact}>
           <SidebarWorkspaceTrailingActionBase
             visible={showDiffStat && !showKebabInSlot && !showShortcut}
           >

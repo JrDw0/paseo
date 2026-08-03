@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Settings2 } from "lucide-react-native";
@@ -28,13 +28,34 @@ interface DisplayPreferenceOption<Value extends string> {
   label: string;
 }
 
-export function SidebarDisplayPreferencesMenu() {
+export function SidebarDisplayPreferencesMenu({
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+  compact = false,
+  testID = "sidebar-display-preferences-menu",
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+  compact?: boolean;
+  testID?: string;
+} = {}) {
   const groupMode = useSidebarViewStore((state) => state.groupMode);
   const hostFilters = useSidebarViewStore((state) => state.hostFilters);
   const setGroupMode = useSidebarViewStore((state) => state.setGroupMode);
   const toggleHostFilter = useSidebarViewStore((state) => state.toggleHostFilter);
   const clearHostFilters = useSidebarViewStore((state) => state.clearHostFilters);
   const hosts = useHosts();
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setInternalOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [onOpenChange],
+  );
 
   const handleSelectMode = useCallback(
     (mode: SidebarGroupMode) => {
@@ -46,21 +67,23 @@ export function SidebarDisplayPreferencesMenu() {
   const triggerStyle = useCallback(
     ({ hovered = false }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.trigger,
+      compact && styles.triggerCompact,
+      hideTrigger && styles.hiddenTrigger,
       hovered && styles.triggerHovered,
     ],
-    [],
+    [compact, hideTrigger],
   );
 
   const showHostFilter = hosts.length > 1;
   const allHostsSelected = hostFilters.length === 0;
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger
         style={triggerStyle}
         accessibilityRole={platformIsWeb ? undefined : "button"}
         accessibilityLabel="Display preferences"
-        testID="sidebar-display-preferences-menu"
+        testID={testID}
       >
         <ThemedSettings2 size={14} uniProps={filterColorMapping} />
       </DropdownMenuTrigger>
@@ -172,8 +195,19 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,
   },
+  triggerCompact: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.borderRadius.lg,
+  },
   triggerHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  hiddenTrigger: {
+    opacity: 0,
+    position: "absolute",
+    left: 0,
+    top: 0,
   },
   menuHeader: {
     paddingHorizontal: theme.spacing[3],

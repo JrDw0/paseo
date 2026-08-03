@@ -934,6 +934,8 @@ export const ptBR: TranslationResources = {
       settings: "Configurações",
       closeSidebar: "Fechar barra lateral",
       importRecentSessions: "Importar sessão recente",
+      more: "Mais",
+      displayPreferences: "Preferências de exibição",
     },
     help: {
       trigger: "Ajuda e suporte",
@@ -988,6 +990,11 @@ export const ptBR: TranslationResources = {
       status: {
         scriptsAvailable: "Scripts disponíveis",
         creating: "Criando...",
+        needsInput: "Entrada necessária",
+        failed: "Falhou",
+        attention: "Pronto para revisar",
+        running: "Trabalhando",
+        done: "Concluído",
       },
       actions: {
         menu: "Ações do workspace",

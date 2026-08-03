@@ -904,6 +904,8 @@ export const zhCN: TranslationResources = {
       settings: "设置",
       closeSidebar: "关闭侧边栏",
       importRecentSessions: "导入最近会话",
+      more: "更多",
+      displayPreferences: "显示偏好",
     },
     help: {
       trigger: "帮助与支持",
@@ -956,6 +958,11 @@ export const zhCN: TranslationResources = {
       status: {
         scriptsAvailable: "有可用 scripts",
         creating: "正在创建...",
+        needsInput: "需要输入",
+        failed: "失败",
+        attention: "待查看",
+        running: "工作中",
+        done: "完成",
       },
       actions: {
         menu: "Workspace 操作",

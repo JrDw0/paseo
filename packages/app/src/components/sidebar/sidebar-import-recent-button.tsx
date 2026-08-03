@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -23,7 +23,14 @@ const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foregrou
  * workspace header's import entry, no cwd/workspaceId is locked in, so every
  * recent session across all projects is offered.
  */
-export function SidebarImportRecentButton() {
+export function SidebarImportRecentButton({
+  hideTrigger = false,
+  openRequest = 0,
+}: {
+  hideTrigger?: boolean;
+  /** Increment to start the existing import flow from another trigger. */
+  openRequest?: number;
+} = {}) {
   const { t } = useTranslation();
   const router = useRouter();
   const chooseHost = useHostChooser();
@@ -32,6 +39,7 @@ export function SidebarImportRecentButton() {
   const importClient = useHostRuntimeClient(importServerId ?? "");
   const openImportedProject = useOpenProject(importServerId);
   const [isImportSheetOpen, setIsImportSheetOpen] = useState(false);
+  const handledOpenRequestRef = useRef(0);
 
   const handlePress = useCallback(() => {
     chooseHost({
@@ -42,6 +50,13 @@ export function SidebarImportRecentButton() {
       },
     });
   }, [chooseHost]);
+
+  useEffect(() => {
+    if (openRequest > 0 && openRequest !== handledOpenRequestRef.current) {
+      handledOpenRequestRef.current = openRequest;
+      handlePress();
+    }
+  }, [handlePress, openRequest]);
 
   const handleCloseImportSession = useCallback(() => setIsImportSheetOpen(false), []);
 
@@ -63,9 +78,10 @@ export function SidebarImportRecentButton() {
   const buttonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.button,
+      hideTrigger && styles.hiddenButton,
       (hovered || pressed) && styles.buttonHovered,
     ],
-    [],
+    [hideTrigger],
   );
 
   return (
@@ -106,5 +122,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   buttonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  hiddenButton: {
+    opacity: 0,
+    position: "absolute",
+    left: 0,
+    top: 0,
   },
 }));

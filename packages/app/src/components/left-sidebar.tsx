@@ -1,13 +1,17 @@
 import { router, usePathname } from "expo-router";
 import {
   CalendarClock,
+  Clock,
+  CircleHelp,
   FolderPlus,
   History,
   Home,
+  MoreHorizontal,
   Plus,
   Search,
   Server,
   Settings,
+  SlidersHorizontal,
   X,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -70,6 +74,7 @@ import type { ShortcutKey } from "@/utils/format-shortcut";
 import { SidebarAgentListSkeleton } from "./sidebar-agent-list-skeleton";
 import { SidebarCalloutSlot } from "./sidebar-callout-slot";
 import { SidebarImportRecentButton } from "./sidebar/sidebar-import-recent-button";
+import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import {
   SidebarFilterTextProvider,
   useSidebarFilterText,
@@ -112,6 +117,10 @@ interface SidebarLabels {
   sessions: string;
   schedules: string;
   closeSidebar: string;
+  more: string;
+  displayPreferences: string;
+  importRecentSessions: string;
+  help: string;
 }
 
 interface MobileSidebarProps extends SidebarSharedProps {
@@ -121,6 +130,8 @@ interface MobileSidebarProps extends SidebarSharedProps {
   handleViewMoreNavigate: () => void;
   handleViewSchedulesNavigate: () => void;
 }
+
+type MobileMoreAction = "hosts" | "import" | "displayPreferences" | "help" | "settings";
 
 interface DesktopSidebarProps extends SidebarSharedProps {
   insetsTop: number;
@@ -237,6 +248,10 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
       sessions: t("sidebar.sections.sessions"),
       schedules: t("sidebar.sections.schedules"),
       closeSidebar: t("sidebar.actions.closeSidebar"),
+      more: t("sidebar.actions.more"),
+      displayPreferences: t("sidebar.actions.displayPreferences"),
+      importRecentSessions: t("sidebar.actions.importRecentSessions"),
+      help: t("sidebar.help.trigger"),
     }),
     [t],
   );
@@ -313,6 +328,7 @@ function FooterIconButton({
   iconSize,
   shortcutKeys,
   theme,
+  hidden = false,
 }: {
   onPress: () => void;
   testID: string;
@@ -322,13 +338,14 @@ function FooterIconButton({
   shortcutKeys?: ReturnType<typeof useShortcutKeys>;
   theme: SidebarTheme;
   buttonRef?: RefObject<View | null>;
+  hidden?: boolean;
 }) {
   return (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
         <Pressable
           ref={buttonRef}
-          style={styles.footerIconButton}
+          style={[styles.footerIconButton, hidden && styles.footerIconButtonHidden]}
           testID={testID}
           nativeID={testID}
           collapsable={false}
@@ -415,15 +432,29 @@ function SidebarHostPicker({
   label,
   onAddHost,
   onOpenHostSettings,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
 }: {
   theme: SidebarTheme;
   label: string;
   onAddHost: () => void;
   onOpenHostSettings: (serverId: string) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
   const hosts = useHosts();
   const triggerRef = useRef<View | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = controlledOpen ?? internalOpen;
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setInternalOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+    },
+    [onOpenChange],
+  );
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -432,7 +463,9 @@ function SidebarHostPicker({
     [onOpenHostSettings],
   );
 
-  const handleOpen = useCallback(() => setIsOpen(true), []);
+  const handleOpen = useCallback(() => {
+    handleOpenChange(true);
+  }, [handleOpenChange]);
 
   return (
     <HostPicker
@@ -440,7 +473,7 @@ function SidebarHostPicker({
       value=""
       onSelect={handleSelect}
       open={isOpen}
-      onOpenChange={setIsOpen}
+      onOpenChange={handleOpenChange}
       anchorRef={triggerRef}
       includeAddHost
       onAddHost={onAddHost}
@@ -460,6 +493,7 @@ function SidebarHostPicker({
         icon={Server}
         iconSize={theme.iconSize.sm}
         theme={theme}
+        hidden={hideTrigger}
       />
     </HostPicker>
   );
@@ -489,7 +523,7 @@ const SidebarNewWorkspaceHeaderRow = memo(function SidebarNewWorkspaceHeaderRow(
 }: {
   label: string;
   testID: string;
-  variant: "header" | "compact";
+  variant: "header" | "compact" | "mobilePrimary";
   shortcutKeys: ShortcutKey[][] | null;
   onBeforeNavigate?: () => void;
 }) {
@@ -631,6 +665,63 @@ function MobileSidebar({
   const isSchedulesActive = pathname.includes("/schedules");
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
   const dragGestureHostPresented = useIsMobilePanelPresented("agent-list");
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isHostsOpen, setIsHostsOpen] = useState(false);
+  const [isDisplayPreferencesOpen, setIsDisplayPreferencesOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [importRecentRequest, setImportRecentRequest] = useState(0);
+  const [pendingMoreAction, setPendingMoreAction] = useState<MobileMoreAction | null>(null);
+  const pendingMoreActionRef = useRef<MobileMoreAction | null>(null);
+
+  const closeMore = useCallback(() => setIsMoreOpen(false), []);
+  const openMore = useCallback(() => setIsMoreOpen(true), []);
+  const consumeMoreAction = useCallback(() => {
+    const action = pendingMoreActionRef.current;
+    if (action === null) return;
+    pendingMoreActionRef.current = null;
+    setPendingMoreAction(null);
+    switch (action) {
+      case "hosts":
+        setIsHostsOpen(true);
+        break;
+      case "import":
+        setImportRecentRequest((value) => value + 1);
+        break;
+      case "displayPreferences":
+        setIsDisplayPreferencesOpen(true);
+        break;
+      case "help":
+        setIsHelpOpen(true);
+        break;
+      case "settings":
+        handleSettings();
+        break;
+    }
+  }, [handleSettings]);
+  const requestMoreAction = useCallback((action: MobileMoreAction) => {
+    pendingMoreActionRef.current = action;
+    setPendingMoreAction(action);
+    setIsMoreOpen(false);
+  }, []);
+
+  // Some compact web bottom-sheet implementations do not forward the native
+  // onDismiss callback. Keep the action pending until the sheet is closed and
+  // use a short fallback so the next picker never opens on top of it.
+  useEffect(() => {
+    if (isMoreOpen || pendingMoreAction === null) return undefined;
+    const timeout = setTimeout(consumeMoreAction, 750);
+    return () => clearTimeout(timeout);
+  }, [consumeMoreAction, isMoreOpen, pendingMoreAction]);
+
+  const moreHeader = useMemo(() => ({ title: labels.more }), [labels.more]);
+  const handleMoreHosts = useCallback(() => requestMoreAction("hosts"), [requestMoreAction]);
+  const handleMoreImport = useCallback(() => requestMoreAction("import"), [requestMoreAction]);
+  const handleMoreDisplayPreferences = useCallback(
+    () => requestMoreAction("displayPreferences"),
+    [requestMoreAction],
+  );
+  const handleMoreHelp = useCallback(() => requestMoreAction("help"), [requestMoreAction]);
+  const handleMoreSettings = useCallback(() => requestMoreAction("settings"), [requestMoreAction]);
 
   const handleViewMore = useCallback(() => {
     closeSidebar();
@@ -667,7 +758,7 @@ function MobileSidebar({
           <SidebarNewWorkspaceHeaderRow
             label={labels.newWorkspace}
             testID="sidebar-global-new-workspace"
-            variant="compact"
+            variant="mobilePrimary"
             shortcutKeys={newWorkspaceKeys}
             onBeforeNavigate={closeSidebar}
           />
@@ -677,7 +768,7 @@ function MobileSidebar({
             onPress={handleViewMore}
             isActive={isSessionsActive}
             testID="sidebar-sessions"
-            variant="compact"
+            variant="mobileSecondary"
           />
           <SidebarHeaderRow
             icon={CalendarClock}
@@ -685,7 +776,7 @@ function MobileSidebar({
             onPress={handleViewSchedules}
             isActive={isSchedulesActive}
             testID="sidebar-schedules"
-            variant="compact"
+            variant="mobileSecondary"
           />
         </View>
         <WindowChromeSafeArea placement="inline" style={styles.mobileCloseButtonRow}>
@@ -731,18 +822,167 @@ function MobileSidebar({
           />
         )}
 
-        <SidebarFooter
-          theme={theme}
-          handleOpenProject={handleOpenProject}
-          handleHome={handleHome}
-          handleSettings={handleSettings}
+        <MobileSidebarFooter
           labels={labels}
-          handleAddHost={handleAddHost}
-          handleOpenHostSettings={handleOpenHostSettings}
+          onAddProject={handleOpenProject}
+          onHome={handleHome}
+          onMore={openMore}
         />
+      </View>
+      <AdaptiveModalSheet
+        visible={isMoreOpen}
+        header={moreHeader}
+        onClose={closeMore}
+        onDismiss={consumeMoreAction}
+        snapPoints={["55%", "80%"]}
+        testID="sidebar-more-sheet"
+        contentStyle={styles.mobileMoreSheetContent}
+      >
+        <MobileMoreActionRow
+          icon={Server}
+          label={labels.hosts}
+          testID="sidebar-more-hosts"
+          onPress={handleMoreHosts}
+        />
+        <MobileMoreActionRow
+          icon={Clock}
+          label={labels.importRecentSessions}
+          testID="sidebar-more-import-recent"
+          onPress={handleMoreImport}
+        />
+        <MobileMoreActionRow
+          icon={SlidersHorizontal}
+          label={labels.displayPreferences}
+          testID="sidebar-more-display-preferences"
+          onPress={handleMoreDisplayPreferences}
+        />
+        <MobileMoreActionRow
+          icon={CircleHelp}
+          label={labels.help}
+          testID="sidebar-more-help"
+          onPress={handleMoreHelp}
+        />
+        <MobileMoreActionRow
+          icon={Settings}
+          label={labels.settings}
+          testID="sidebar-more-settings"
+          onPress={handleMoreSettings}
+        />
+      </AdaptiveModalSheet>
+      <View style={styles.mobileHiddenMenuEntrypoints} pointerEvents="none">
+        <SidebarHostPicker
+          theme={theme}
+          label={labels.hosts}
+          onAddHost={handleAddHost}
+          onOpenHostSettings={handleOpenHostSettings}
+          open={isHostsOpen}
+          onOpenChange={setIsHostsOpen}
+          hideTrigger
+        />
+        <SidebarImportRecentButton hideTrigger openRequest={importRecentRequest} />
+        <SidebarDisplayPreferencesMenu
+          open={isDisplayPreferencesOpen}
+          onOpenChange={setIsDisplayPreferencesOpen}
+          hideTrigger
+          testID="sidebar-display-preferences-menu-hidden"
+        />
+        <SidebarHelpMenu open={isHelpOpen} onOpenChange={setIsHelpOpen} hideTrigger />
       </View>
     </MobilePanelOverlay>
   );
+}
+
+function MobileSidebarFooter({
+  labels,
+  onAddProject,
+  onHome,
+  onMore,
+}: {
+  labels: SidebarLabels;
+  onAddProject: () => void;
+  onHome: () => void;
+  onMore: () => void;
+}) {
+  return (
+    <View style={styles.mobileSidebarFooter}>
+      <MobileFooterAction
+        icon={FolderPlus}
+        label={labels.addProject}
+        onPress={onAddProject}
+        testID="sidebar-mobile-add-project"
+      />
+      <MobileFooterAction
+        icon={Home}
+        label={labels.home}
+        onPress={onHome}
+        testID="sidebar-mobile-home"
+      />
+      <MobileFooterAction
+        icon={MoreHorizontal}
+        label={labels.more}
+        onPress={onMore}
+        testID="sidebar-mobile-more"
+      />
+    </View>
+  );
+}
+
+function MobileFooterAction({
+  icon: Icon,
+  label,
+  onPress,
+  testID,
+}: {
+  icon: typeof FolderPlus;
+  label: string;
+  onPress: () => void;
+  testID: string;
+}) {
+  const { theme } = useUnistyles();
+  return (
+    <Pressable
+      style={styles.mobileFooterAction}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      testID={testID}
+    >
+      <Icon size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+      <Text style={styles.mobileFooterActionLabel} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function MobileMoreActionRow({
+  icon: Icon,
+  label,
+  onPress,
+  testID,
+}: {
+  icon: typeof FolderPlus;
+  label: string;
+  onPress: () => void;
+  testID: string;
+}) {
+  const { theme } = useUnistyles();
+  return (
+    <Pressable
+      style={mobileMoreActionRowStyle}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      testID={testID}
+    >
+      <Icon size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+      <Text style={styles.mobileMoreActionLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function mobileMoreActionRowStyle({ pressed }: PressableStateCallbackType) {
+  return [styles.mobileMoreActionRow, pressed && styles.mobileMoreActionRowPressed];
 }
 
 function DesktopSidebar({
@@ -966,7 +1206,10 @@ function WorkspacesSectionHeader() {
         {isCompactLayout ? (
           // On compact screens the magnifier grows into an inline filter; the
           // command center stays one shortcut away from the docked search icon.
-          <SidebarWorkspacesFilterInput />
+          <>
+            <SidebarWorkspacesFilterInput />
+            <SidebarDisplayPreferencesMenu compact />
+          </>
         ) : (
           <Tooltip delayDuration={300}>
             <TooltipTrigger asChild>
@@ -992,17 +1235,19 @@ function WorkspacesSectionHeader() {
             </TooltipContent>
           </Tooltip>
         )}
-        <SidebarImportRecentButton />
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <View>
-              <SidebarDisplayPreferencesMenu />
-            </View>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" align="center" offset={8}>
-            <IconTooltipContent label="Display preferences" />
-          </TooltipContent>
-        </Tooltip>
+        {!isCompactLayout ? <SidebarImportRecentButton /> : null}
+        {!isCompactLayout ? (
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <View>
+                <SidebarDisplayPreferencesMenu />
+              </View>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" offset={8}>
+              <IconTooltipContent label="Display preferences" />
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
       </View>
     </View>
   );
@@ -1065,8 +1310,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
     flex: 1,
-    maxWidth: 220,
-    height: 28,
+    maxWidth: 260,
+    height: {
+      xs: 44,
+      md: 28,
+    },
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -1086,8 +1334,63 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,
   },
+  footerIconButtonHidden: {
+    opacity: 0,
+    position: "absolute",
+    left: 0,
+    top: 0,
+  },
   workspacesHeaderIconButtonHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  mobileSidebarFooter: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    justifyContent: "space-around",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  mobileFooterAction: {
+    minHeight: 48,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[1],
+    borderRadius: theme.borderRadius.lg,
+  },
+  mobileFooterActionLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 16,
+  },
+  mobileMoreSheetContent: {
+    gap: theme.spacing[1],
+  },
+  mobileMoreActionRow: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.lg,
+  },
+  mobileMoreActionRowPressed: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  mobileMoreActionLabel: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+  },
+  mobileHiddenMenuEntrypoints: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    opacity: 0,
   },
   sidebarContent: {
     flex: 1,
@@ -1104,8 +1407,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   mobileCloseButton: {
     marginRight: theme.spacing[4],
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.lg,
