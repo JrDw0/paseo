@@ -2,6 +2,12 @@ import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { LiveFileModel, type LiveFileSession } from "./model";
 
+// Aligns with the editor's 1MB editability cut-off: anything above it is not
+// editable anyway, and a preview pane has no use for more than its head. The
+// daemon streams back just this prefix, so opening a multi-hundred-MB log no
+// longer stalls the daemon or floods the client.
+export const FILE_PREVIEW_MAX_BYTES = 1024 * 1024;
+
 export function useLiveFile(input: {
   client: DaemonClient | null;
   cwd: string | null;
@@ -18,7 +24,7 @@ export function useLiveFile(input: {
         return client.subscribeFile(target, onVersion);
       },
       read(target) {
-        return client.readFile(target.cwd, target.path);
+        return client.readFile(target.cwd, target.path, undefined, FILE_PREVIEW_MAX_BYTES);
       },
     };
   }, [input.client]);

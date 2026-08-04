@@ -13,6 +13,7 @@ export function explorerFileFromReadResult(file: FileReadResult): ExplorerFile {
     size: file.size,
     modifiedAt: file.modifiedAt,
     revision: file.revision,
+    truncated: file.truncated === true,
   };
 }
 

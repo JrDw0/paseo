@@ -1603,6 +1603,7 @@ export const ar: TranslationResources = {
       loading: "جارٍ تحميل الملف...",
       noPreview: "لا تتوفر معاينة",
       binaryPreviewUnavailable: "المعاينة الثنائية غير متاحة",
+      truncatedPreview: "المعاينة مقتطعة — حجم الملف الكامل {{size}}",
       failedToLoad: "فشل تحميل الملف",
       failedToLoadPreview: "فشل تحميل معاينة الملف",
       editor: {

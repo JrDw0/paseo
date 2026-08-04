@@ -16,6 +16,10 @@ export const FileBeginMetadataSchema = z.object({
   modifiedAt: z.string(),
   revision: z.string().optional(),
   fileName: z.string().optional(),
+  // True when the request's maxBytes capped the transfer; size still reports
+  // the full on-disk file size. Downloads never set maxBytes, so they never
+  // see this.
+  truncated: z.boolean().optional(),
 });
 
 export interface FileBegin {

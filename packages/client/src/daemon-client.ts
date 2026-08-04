@@ -428,6 +428,9 @@ export interface FileReadResult {
   kind: LegacyFileExplorerFilePayload["kind"];
   modifiedAt: string;
   revision?: string;
+  // True when a maxBytes preview cap cut the content; size still reports the
+  // full on-disk file size.
+  truncated?: boolean;
 }
 export interface FileStreamBeginMetadata {
   mime: string;
@@ -927,6 +930,7 @@ interface BinaryFileTransferState extends PendingBinaryFileRead {
   >["metadata"]["encoding"];
   modifiedAt: string;
   revision?: string;
+  truncated?: boolean;
   chunks: Uint8Array[];
 }
 
@@ -1073,6 +1077,7 @@ function legacyExplorerFileToBytes(file: LegacyFileExplorerFilePayload): FileRea
     kind: file.kind,
     modifiedAt: file.modifiedAt,
     revision: file.revision,
+    truncated: file.truncated,
   };
 }
 
@@ -4292,6 +4297,7 @@ export class DaemonClient {
     mode: "list" | "file",
     requestId?: string,
     acceptBinary = false,
+    maxBytes?: number,
   ): Promise<FileExplorerPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
@@ -4301,6 +4307,7 @@ export class DaemonClient {
         path,
         mode,
         ...(acceptBinary ? { acceptBinary: true } : {}),
+        ...(maxBytes !== undefined ? { maxBytes } : {}),
       },
       responseType: "file_explorer_response",
       // Binary mode transfers the file before the response completes.
@@ -4323,11 +4330,23 @@ export class DaemonClient {
     return payload.directory;
   }
 
-  async readFile(cwd: string, path: string, requestId?: string): Promise<FileReadResult> {
+  async readFile(
+    cwd: string,
+    path: string,
+    requestId?: string,
+    maxBytes?: number,
+  ): Promise<FileReadResult> {
     const resolvedRequestId = this.createRequestId(requestId);
     this.pendingBinaryFileReads.set(resolvedRequestId, { cwd, path });
     try {
-      const payload = await this.requestFileExplorer(cwd, path, "file", resolvedRequestId, true);
+      const payload = await this.requestFileExplorer(
+        cwd,
+        path,
+        "file",
+        resolvedRequestId,
+        true,
+        maxBytes,
+      );
       if (payload.error) {
         throw new Error(payload.error);
       }
@@ -5758,6 +5777,7 @@ export class DaemonClient {
         encoding: frame.metadata.encoding,
         modifiedAt: frame.metadata.modifiedAt,
         revision: frame.metadata.revision,
+        truncated: frame.metadata.truncated,
         chunks: [],
       });
       return;
@@ -5815,7 +5835,13 @@ export class DaemonClient {
       return;
     }
 
-    const bytes = concatByteChunks(transfer.chunks, transfer.size);
+    // A truncated transfer reports the full on-disk size but delivers only the
+    // preview prefix — sizing the buffer by transfer.size would allocate the
+    // entire file's worth of memory for a cap-sized payload.
+    const receivedBytes = transfer.truncated
+      ? transfer.chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
+      : transfer.size;
+    const bytes = concatByteChunks(transfer.chunks, receivedBytes);
     this.activeBinaryFileTransfers.delete(frame.requestId);
     this.completedBinaryFileReads.set(frame.requestId, {
       bytes,
@@ -5825,6 +5851,7 @@ export class DaemonClient {
       kind: binaryFileKind(transfer.mime, transfer.encoding),
       modifiedAt: transfer.modifiedAt,
       revision: transfer.revision,
+      truncated: transfer.truncated,
     });
     this.handleSessionMessage({
       type: "file_explorer_response",

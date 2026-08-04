@@ -182,43 +182,48 @@ export class WorkspaceFilesSession {
         );
       } else {
         if (request.acceptBinary && this.host.hasBinaryChannel()) {
-          await streamExplorerFile({ root: cwd, relativePath: requestedPath }, async (file) => {
-            await this.host.emitBinary(
-              encodeFileTransferFrame({
-                opcode: FileTransferOpcode.FileBegin,
-                requestId,
-                metadata: {
-                  mime: file.mimeType,
-                  size: file.size,
-                  encoding: file.encoding,
-                  modifiedAt: file.modifiedAt,
-                  revision: file.revision,
-                },
-              }),
-              source,
-            );
-            for await (const chunk of file.chunks) {
+          await streamExplorerFile(
+            { root: cwd, relativePath: requestedPath, maxBytes: request.maxBytes },
+            async (file) => {
               await this.host.emitBinary(
                 encodeFileTransferFrame({
-                  opcode: FileTransferOpcode.FileChunk,
+                  opcode: FileTransferOpcode.FileBegin,
                   requestId,
-                  payload: chunk,
+                  metadata: {
+                    mime: file.mimeType,
+                    size: file.size,
+                    encoding: file.encoding,
+                    modifiedAt: file.modifiedAt,
+                    revision: file.revision,
+                    truncated: file.truncated,
+                  },
                 }),
                 source,
               );
-            }
-            await this.host.emitBinary(
-              encodeFileTransferFrame({
-                opcode: FileTransferOpcode.FileEnd,
-                requestId,
-              }),
-              source,
-            );
-          });
+              for await (const chunk of file.chunks) {
+                await this.host.emitBinary(
+                  encodeFileTransferFrame({
+                    opcode: FileTransferOpcode.FileChunk,
+                    requestId,
+                    payload: chunk,
+                  }),
+                  source,
+                );
+              }
+              await this.host.emitBinary(
+                encodeFileTransferFrame({
+                  opcode: FileTransferOpcode.FileEnd,
+                  requestId,
+                }),
+                source,
+              );
+            },
+          );
         } else {
           const file = await readExplorerFile({
             root: cwd,
             relativePath: requestedPath,
+            maxBytes: request.maxBytes,
           });
 
           this.host.emit(

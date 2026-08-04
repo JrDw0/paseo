@@ -2220,6 +2220,9 @@ const FileExplorerFileSchema = z.object({
   size: z.number(),
   modifiedAt: z.string(),
   revision: z.string().optional(),
+  // True when the request's maxBytes capped the returned content; size still
+  // reports the full on-disk file size.
+  truncated: z.boolean().optional(),
 });
 
 const FileExplorerDirectorySchema = z.object({
@@ -2234,6 +2237,10 @@ export const FileExplorerRequestSchema = z.object({
   mode: z.enum(["list", "file"]),
   requestId: z.string(),
   acceptBinary: z.boolean().optional(),
+  // Preview cap: when set and the file is larger, the daemon returns only the
+  // leading maxBytes bytes and marks the response truncated. Downloads never
+  // set this so they keep receiving full files.
+  maxBytes: z.number().int().positive().optional(),
 });
 
 export const FileVersionSchema = z.discriminatedUnion("status", [

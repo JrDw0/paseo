@@ -209,6 +209,17 @@ const codeLineStyles = StyleSheet.create((theme) => ({
   },
 }));
 
+function TruncatedPreviewBanner({ sizeBytes }: { sizeBytes: number }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.truncatedBanner} testID="file-truncated-banner">
+      <Text style={styles.truncatedBannerText}>
+        {t("panels.file.truncatedPreview", { size: formatFileSize({ size: sizeBytes }) })}
+      </Text>
+    </View>
+  );
+}
+
 function FilePreviewBody({
   preview,
   mode,
@@ -289,11 +300,16 @@ function FilePreviewBody({
     );
   }
 
+  const truncatedBanner = preview.truncated ? (
+    <TruncatedPreviewBanner sizeBytes={preview.size} />
+  ) : null;
+
   if (preview.kind === "text") {
     if (renderKind === "html") {
       // The HTML document owns its own scrolling, so no ScrollView wrapper here.
       return (
         <View style={styles.previewScrollContainer}>
+          {truncatedBanner}
           <FileHtmlPreview html={preview.content ?? ""} testID="file-html-preview" />
         </View>
       );
@@ -302,6 +318,7 @@ function FilePreviewBody({
     if (renderKind === "markdown") {
       return (
         <View style={styles.previewScrollContainer}>
+          {truncatedBanner}
           <RNScrollView
             ref={previewScrollRef}
             style={styles.previewContent}
@@ -340,6 +357,7 @@ function FilePreviewBody({
 
     return (
       <View style={styles.previewScrollContainer}>
+        {truncatedBanner}
         <RNScrollView
           ref={previewScrollRef}
           style={styles.previewContent}
@@ -893,5 +911,16 @@ const styles = StyleSheet.create((theme) => ({
   previewImage: {
     width: "100%",
     height: 420,
+  },
+  truncatedBanner: {
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceSidebar,
+  },
+  truncatedBannerText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
 }));

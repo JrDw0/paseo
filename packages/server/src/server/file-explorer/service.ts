@@ -16,6 +16,10 @@ export interface ListDirectoryParams {
 export interface ReadFileParams {
   root: string;
   relativePath: string;
+  // Preview cap: files larger than this return only their leading maxBytes
+  // bytes marked truncated, classified from that prefix. Unset means read and
+  // classify the whole file (downloads rely on this).
+  maxBytes?: number;
 }
 
 export interface WriteFileParams extends ReadFileParams {
@@ -63,6 +67,7 @@ export interface FileExplorerFile {
   size: number;
   modifiedAt: string;
   revision: string;
+  truncated: boolean;
 }
 
 export interface FileExplorerFileBytes {
@@ -74,6 +79,7 @@ export interface FileExplorerFileBytes {
   size: number;
   modifiedAt: string;
   revision: string;
+  truncated: boolean;
 }
 
 export interface FileExplorerFileStream {
@@ -84,6 +90,7 @@ export interface FileExplorerFileStream {
   size: number;
   modifiedAt: string;
   revision: string;
+  truncated: boolean;
   chunks: AsyncIterable<Uint8Array>;
 }
 
@@ -195,8 +202,9 @@ export async function listDirectoryEntries({
 export async function readExplorerFile({
   root,
   relativePath,
+  maxBytes,
 }: ReadFileParams): Promise<FileExplorerFile> {
-  const file = await readExplorerFileBytes({ root, relativePath });
+  const file = await readExplorerFileBytes({ root, relativePath, maxBytes });
 
   if (file.kind === "image") {
     return {
@@ -208,6 +216,7 @@ export async function readExplorerFile({
       size: file.size,
       modifiedAt: file.modifiedAt,
       revision: file.revision,
+      truncated: file.truncated,
     };
   }
 
@@ -220,6 +229,7 @@ export async function readExplorerFile({
       size: file.size,
       modifiedAt: file.modifiedAt,
       revision: file.revision,
+      truncated: file.truncated,
     };
   }
 
@@ -232,12 +242,14 @@ export async function readExplorerFile({
     size: file.size,
     modifiedAt: file.modifiedAt,
     revision: file.revision,
+    truncated: file.truncated,
   };
 }
 
 export async function readExplorerFileBytes({
   root,
   relativePath,
+  maxBytes,
 }: ReadFileParams): Promise<FileExplorerFileBytes> {
   const filePath = await resolveScopedPath({ root, relativePath });
   const handle = await openFileForRead(filePath.resolvedPath);
@@ -250,12 +262,42 @@ export async function readExplorerFileBytes({
     }
 
     const ext = path.extname(filePath.resolvedPath).toLowerCase();
+    const isImage = ext in IMAGE_MIME_TYPES;
     const basePayload = {
       path: normalizeRelativePath({ root, targetPath: filePath.requestedPath }),
       size: Number(stats.size),
       modifiedAt: stats.mtime.toISOString(),
       revision: fileRevision(stats),
     };
+
+    // Preview cap: the caller only wants the leading maxBytes. Reading (and
+    // scanning) anything beyond that stalls the daemon for seconds on a
+    // multi-hundred-MB log, which freezes every client waiting on it — so the
+    // prefix alone decides the kind. (Images are excluded: a truncated image
+    // cannot render, so they keep the full-read path below.)
+    if (!isImage && maxBytes !== undefined && stats.size > maxBytes) {
+      const buffer = Buffer.allocUnsafe(maxBytes);
+      const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
+      const prefix = buffer.subarray(0, bytesRead);
+      if (prefix.includes(0) || !isValidUtf8Prefix(prefix)) {
+        return {
+          ...basePayload,
+          kind: "binary",
+          encoding: "binary",
+          bytes: Buffer.alloc(0),
+          mimeType: "application/octet-stream",
+          truncated: true,
+        };
+      }
+      return {
+        ...basePayload,
+        kind: "text",
+        encoding: "utf-8",
+        bytes: prefix,
+        mimeType: textMimeTypeForExtension(ext),
+        truncated: true,
+      };
+    }
 
     // Sniff the leading bytes before reading a large file. A big binary (e.g.
     // an .apk the user tapped by accident) must fail fast here — the eager
@@ -271,7 +313,7 @@ export async function readExplorerFileBytes({
     //
     // Files below BINARY_SNIFF_MIN_BYTES skip the sniff: readFile() on them is
     // already fast, and sniffing would just read their first bytes twice.
-    if (!(ext in IMAGE_MIME_TYPES) && stats.size > BINARY_SNIFF_MIN_BYTES) {
+    if (!isImage && stats.size > BINARY_SNIFF_MIN_BYTES) {
       const sampleLength = Math.min(FILE_TYPE_SAMPLE_BYTES, Number(stats.size));
       const sample = Buffer.allocUnsafe(sampleLength);
       const { bytesRead } = await handle.read(sample, 0, sampleLength, 0);
@@ -282,18 +324,20 @@ export async function readExplorerFileBytes({
           encoding: "binary",
           bytes: Buffer.alloc(0),
           mimeType: "application/octet-stream",
+          truncated: false,
         };
       }
     }
 
     const buffer = await handle.readFile();
-    if (ext in IMAGE_MIME_TYPES) {
+    if (isImage) {
       return {
         ...basePayload,
         kind: "image",
         encoding: "binary",
         bytes: buffer,
         mimeType: IMAGE_MIME_TYPES[ext],
+        truncated: false,
       };
     }
 
@@ -304,6 +348,7 @@ export async function readExplorerFileBytes({
         encoding: "binary",
         bytes: buffer,
         mimeType: "application/octet-stream",
+        truncated: false,
       };
     }
 
@@ -313,6 +358,7 @@ export async function readExplorerFileBytes({
       encoding: "utf-8",
       bytes: buffer,
       mimeType: textMimeTypeForExtension(ext),
+      truncated: false,
     };
   } finally {
     await handle.close();
@@ -320,7 +366,7 @@ export async function readExplorerFileBytes({
 }
 
 export async function streamExplorerFile(
-  { root, relativePath }: ReadFileParams,
+  { root, relativePath, maxBytes }: ReadFileParams,
   consume: (file: FileExplorerFileStream) => Promise<void>,
 ): Promise<void> {
   const filePath = await resolveScopedPath({ root, relativePath });
@@ -336,6 +382,29 @@ export async function streamExplorerFile(
     const advertisedRevision = fileRevision(stats);
     const ext = path.extname(filePath.resolvedPath).toLowerCase();
     const isImage = ext in IMAGE_MIME_TYPES;
+
+    // Preview cap: classify from and stream only the leading maxBytes. The
+    // full-file classification scan (isFileHandleBinary) used on the download
+    // path stalls the daemon for seconds on a multi-hundred-MB file before a
+    // single chunk goes out, which freezes every client waiting on the daemon.
+    if (!isImage && maxBytes !== undefined && advertisedSize > maxBytes) {
+      const isBinary = await isPreviewPrefixBinary(handle, maxBytes);
+      await consume({
+        path: normalizeRelativePath({ root, targetPath: filePath.requestedPath }),
+        kind: isBinary ? "binary" : "text",
+        encoding: isBinary ? "binary" : "utf-8",
+        mimeType: isBinary ? "application/octet-stream" : textMimeTypeForExtension(ext),
+        size: advertisedSize,
+        modifiedAt: stats.mtime.toISOString(),
+        revision: advertisedRevision,
+        truncated: true,
+        chunks: isBinary
+          ? emptyFileChunks()
+          : readFileHandleChunks(handle, maxBytes, advertisedRevision),
+      });
+      return;
+    }
+
     const isBinary = isImage || (await isFileHandleBinary(handle, advertisedSize));
     let kind: ExplorerFileKind = "text";
     let mimeType = textMimeTypeForExtension(ext);
@@ -355,11 +424,27 @@ export async function streamExplorerFile(
       size: advertisedSize,
       modifiedAt: stats.mtime.toISOString(),
       revision: advertisedRevision,
+      truncated: false,
       chunks: readFileHandleChunks(handle, advertisedSize, advertisedRevision),
     });
   } finally {
     await handle.close();
   }
+}
+
+// Classification for the preview cap: same rules as readExplorerFileBytes, so
+// a file previews identically whether it arrives over the binary channel (this
+// path) or the JSON fallback.
+async function isPreviewPrefixBinary(handle: FileHandle, maxBytes: number): Promise<boolean> {
+  const buffer = Buffer.allocUnsafe(maxBytes);
+  const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
+  const prefix = buffer.subarray(0, bytesRead);
+  return prefix.includes(0) || !isValidUtf8Prefix(prefix);
+}
+
+async function* emptyFileChunks(): AsyncIterable<Uint8Array> {
+  // A truncated binary preview delivers no body, matching the JSON payload,
+  // which carries no content for binary files.
 }
 
 async function isFileHandleBinary(handle: FileHandle, advertisedSize: number): Promise<boolean> {
@@ -706,6 +791,20 @@ function isLikelyBinary(buffer: Buffer): boolean {
 function isValidUtf8(buffer: Buffer): boolean {
   try {
     new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// A preview cap can slice a multi-byte UTF-8 character at the boundary, which
+// would read as invalid encoding and misclassify the file as binary. UTF-8
+// sequences are at most 4 bytes, so at most 3 dangling tail bytes can be
+// incomplete — validate excluding them.
+function isValidUtf8Prefix(bytes: Uint8Array): boolean {
+  const end = Math.max(0, bytes.length - 3);
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, end));
     return true;
   } catch {
     return false;
