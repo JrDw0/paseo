@@ -2027,6 +2027,8 @@ class ClaudeAgentSession implements AgentSession {
   private userMessageIds: string[] = [];
   private readonly emittedUserMessageIds = new Set<string>();
   private readonly rewindTurnAnchors: ClaudeRewindTurnAnchor[] = [];
+  /** clientMessageId -> claude message uuid for messages submitted by the app this process. */
+  private readonly submittedClientMessageToUuid = new Map<string, string>();
   private pendingFreshSessionId: string | null = null;
   private recentStderr = "";
   private closed = false;
@@ -2156,6 +2158,13 @@ class ClaudeAgentSession implements AgentSession {
     const sdkMessage = this.toSdkUserMessage(prompt);
     const sdkUserMessageId =
       typeof sdkMessage.uuid === "string" && sdkMessage.uuid.length > 0 ? sdkMessage.uuid : null;
+    // The route rewind is requested by the app using the id it knows for the user
+    // message. For an optimistic-or-failed-turn message that id is the clientMessageId,
+    // not the claude uuid, so remember the mapping to keep rewind resolvable even when
+    // the server never echoed a canonical uuid for the turn.
+    if (typeof options?.clientMessageId === "string" && sdkUserMessageId) {
+      this.submittedClientMessageToUuid.set(options.clientMessageId, sdkUserMessageId);
+    }
     this.rememberRewindUserAnchor(sdkUserMessageId);
     const turnId = this.createTurnId("foreground");
     this.activeForegroundTurnId = turnId;
@@ -2761,6 +2770,7 @@ class ClaudeAgentSession implements AgentSession {
     this.userMessageIds = [];
     this.emittedUserMessageIds.clear();
     this.rewindTurnAnchors.length = 0;
+    this.submittedClientMessageToUuid.clear();
     this.loadPersistedHistory(sessionId);
     if (oldSessionId && oldSessionId !== sessionId) {
       this.dispatchEvents([
@@ -2791,6 +2801,7 @@ class ClaudeAgentSession implements AgentSession {
     this.userMessageIds = [];
     this.emittedUserMessageIds.clear();
     this.rewindTurnAnchors.length = 0;
+    this.submittedClientMessageToUuid.clear();
   }
 
   private rememberUserMessageId(messageId: string | null | undefined): void {
@@ -2865,7 +2876,10 @@ class ClaudeAgentSession implements AgentSession {
   }
 
   private resolveClaudeMessageId(messageId: string): string {
-    return messageId;
+    // Rewind targets may arrive keyed by the app's clientMessageId (an optimistic or
+    // failed-turn user message that never received a canonical claude uuid). Resolve back
+    // to the submitted uuid so anchors recorded at startTurn still match.
+    return this.submittedClientMessageToUuid.get(messageId) ?? messageId;
   }
 
   private resolveConversationRewindTarget(messageId: string): ClaudeConversationRewindTarget {
@@ -3427,6 +3441,19 @@ class ClaudeAgentSession implements AgentSession {
     }
   }
 
+  private logQueryPumpFailure(error: unknown): void {
+    this.logger.warn(
+      {
+        agentId: this.agentId,
+        provider: "claude",
+        sessionId: this.claudeSessionId,
+        turnId: this.activeForegroundTurnId ?? this.autonomousTurn?.id ?? undefined,
+        err: error,
+      },
+      "provider.claude.query_pump.failed",
+    );
+  }
+
   private startQueryPump(): void {
     if (this.closed || this.queryPumpPromise) {
       return;
@@ -3530,6 +3557,7 @@ class ClaudeAgentSession implements AgentSession {
           }
           if (!this.closed && this.query === activeQuery) {
             await this.awaitRecentStderrAfterProcessExit(error);
+            this.logQueryPumpFailure(error);
             this.failActiveTurns(error instanceof Error ? error.message : "Claude stream failed");
           }
           return;

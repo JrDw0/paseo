@@ -698,6 +698,43 @@ describe("ClaudeAgentSession features", () => {
     await session.close();
   });
 
+  test("rewind resolves a submitted clientMessageId to the claude uuid anchor", async () => {
+    const { queryFactory } = createQueryMock();
+    const client = new ClaudeAgentClient({
+      logger,
+      queryFactory,
+      resolveBinary: async () => "/test/claude/bin",
+    });
+    const session = await client.createSession({
+      provider: "claude",
+      cwd: process.cwd(),
+      model: "claude-opus-4-8",
+    });
+
+    // The app rewinds user messages by the id it knows, which for a message that never
+    // received a canonical claude uuid is the clientMessageId. It must resolve to the
+    // anchor recorded at startTurn instead of throwing "not in the tracked conversation".
+    await session.startTurn("hello", { clientMessageId: "cmid_1" });
+    await expect(
+      (
+        session as unknown as {
+          revertConversation(input: { messageId: string }): Promise<void>;
+        }
+      ).revertConversation({ messageId: "cmid_1" }),
+    ).resolves.toBeUndefined();
+
+    // Unknown ids still fail loudly rather than silently rewinding elsewhere.
+    await expect(
+      (
+        session as unknown as {
+          revertConversation(input: { messageId: string }): Promise<void>;
+        }
+      ).revertConversation({ messageId: "no-such-message" }),
+    ).rejects.toThrow("is not in the tracked conversation");
+
+    await session.close();
+  });
+
   test("maps Ultracode to xhigh effort and Claude ultracode settings", async () => {
     const { queryFactory } = createQueryMock();
     const client = new ClaudeAgentClient({
