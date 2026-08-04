@@ -38,6 +38,59 @@ export function formatTimeAgo(date: Date, now: Date = new Date()): string {
   return elapsed.value;
 }
 
+// Minimal t() shape so the localized variant is testable without an i18n instance.
+export type TimeAgoTFunction = (key: string, options?: { count?: number }) => string;
+
+/**
+ * Localized relative time. Same thresholds as formatTimeAgo, but texts come from
+ * the `timeAgo.*` translation keys and the month/day fallback follows `locale`
+ * (an Intl-compatible BCP-47 tag, e.g. i18n.language). Needs the raw diffs rather than
+ * describeElapsed's pre-formatted string, because the i18n plural forms depend on the count.
+ */
+export function formatTimeAgoLocalized(
+  date: Date,
+  now: Date,
+  t: TimeAgoTFunction,
+  locale: string,
+): string {
+  const { diffSec, diffMin, diffHour, diffDay } = timeAgoDiffs(date, now);
+
+  if (diffSec < 10) {
+    return t("timeAgo.justNow");
+  }
+  if (diffMin < 1) {
+    return t("timeAgo.secondsAgo", { count: diffSec });
+  }
+  if (diffHour < 1) {
+    return t("timeAgo.minutesAgo", { count: diffMin });
+  }
+  if (diffDay < 1) {
+    return t("timeAgo.hoursAgo", { count: diffHour });
+  }
+  if (diffDay < 7) {
+    return t("timeAgo.daysAgo", { count: diffDay });
+  }
+  return formatShortMonthDay(date, locale);
+}
+
+function timeAgoDiffs(date: Date, now: Date): {
+  diffSec: number;
+  diffMin: number;
+  diffHour: number;
+  diffDay: number;
+} {
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+  return { diffSec, diffMin, diffHour, diffDay };
+}
+
+function formatShortMonthDay(date: Date, locale: string): string {
+  return date.toLocaleDateString(locale, { month: "short", day: "numeric" });
+}
+
 /**
  * How often a compact label can change, which is all a caller needs to know to keep it honest.
  * `static` means it never will again.

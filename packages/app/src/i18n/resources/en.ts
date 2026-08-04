@@ -987,6 +987,7 @@ export const en = {
     sections: {
       sessions: "History",
       schedules: "Schedules",
+      workspaces: "Workspaces",
     },
     worktreeSetup: {
       title: "Set up worktree scripts",
@@ -1042,6 +1043,7 @@ export const en = {
         copyPath: "Copy path",
         copyBranchName: "Copy branch name",
         rename: "Rename workspace",
+        markAsRead: "Mark as read",
         pin: "Pin to top",
         unpin: "Unpin",
         archive: "Archive",
@@ -1071,6 +1073,13 @@ export const en = {
         archiveFailed: "Failed to archive workspace",
       },
     },
+  },
+  timeAgo: {
+    justNow: "just now",
+    secondsAgo: "{{count}}s ago",
+    minutesAgo: "{{count}}m ago",
+    hoursAgo: "{{count}}h ago",
+    daysAgo: "{{count}}d ago",
   },
   newWorkspace: {
     title: "New workspace",

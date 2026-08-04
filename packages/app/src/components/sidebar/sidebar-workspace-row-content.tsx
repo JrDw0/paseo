@@ -23,7 +23,8 @@ import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sidebar-workspace-title";
 import { useSidebarRowAgentMeta } from "@/components/sidebar/sidebar-workspace-list-context";
 import { getProviderIcon } from "@/components/provider-icons";
-import { formatTimeAgo } from "@/utils/time";
+import { useTranslation } from "react-i18next";
+import { formatTimeAgoLocalized } from "@/utils/time";
 
 // The scrim spans more than the kebab so the fade starts left of the diff stat. Solid from
 // SCRIM_SOLID_OFFSET rightward, which keeps the kebab itself off the gradient entirely.
@@ -226,12 +227,13 @@ function WorkspaceProviderIcon({ meta }: { meta: ReturnType<typeof useSidebarRow
 }
 
 function WorkspaceAgentActivity({ meta }: { meta: ReturnType<typeof useSidebarRowAgentMeta> }) {
+  const { t, i18n } = useTranslation();
   if (!meta) {
     return null;
   }
   return (
     <Text style={styles.workspaceAgentActivity} numberOfLines={1}>
-      {formatTimeAgo(meta.lastActivityAt)}
+      {formatTimeAgoLocalized(meta.lastActivityAt, new Date(), t, i18n.language)}
     </Text>
   );
 }

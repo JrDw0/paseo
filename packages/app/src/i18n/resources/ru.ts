@@ -999,6 +999,7 @@ export const ru: TranslationResources = {
     sections: {
       sessions: "История",
       schedules: "Расписания",
+      workspaces: "Рабочие области",
     },
     worktreeSetup: {
       title: "Настройка сценариев рабочего дерева",
@@ -1054,6 +1055,7 @@ export const ru: TranslationResources = {
         copyPath: "Копировать путь",
         copyBranchName: "Скопировать название ветки",
         rename: "Переименовать рабочую область",
+        markAsRead: "Отметить как прочитанное",
         pin: "Закрепить вверху",
         unpin: "Открепить",
         archive: "Архив",
@@ -1083,6 +1085,13 @@ export const ru: TranslationResources = {
         archiveFailed: "Не удалось заархивировать рабочее пространство.",
       },
     },
+  },
+  timeAgo: {
+    justNow: "только что",
+    secondsAgo: "{{count}} с назад",
+    minutesAgo: "{{count}} мин назад",
+    hoursAgo: "{{count}} ч назад",
+    daysAgo: "{{count}} дн назад",
   },
   newWorkspace: {
     title: "Новое рабочее пространство",

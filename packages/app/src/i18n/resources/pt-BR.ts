@@ -999,6 +999,7 @@ export const ptBR: TranslationResources = {
     sections: {
       sessions: "Histórico",
       schedules: "Agendamentos",
+      workspaces: "Espaços de trabalho",
     },
     worktreeSetup: {
       title: "Configurar scripts de worktree",
@@ -1054,6 +1055,7 @@ export const ptBR: TranslationResources = {
         copyPath: "Copiar caminho",
         copyBranchName: "Copiar nome da branch",
         rename: "Renomear workspace",
+        markAsRead: "Marcar como lido",
         pin: "Fixar no topo",
         unpin: "Desafixar",
         archive: "Arquivar",
@@ -1083,6 +1085,13 @@ export const ptBR: TranslationResources = {
         archiveFailed: "Falha ao arquivar workspace",
       },
     },
+  },
+  timeAgo: {
+    justNow: "agora mesmo",
+    secondsAgo: "há {{count}} s",
+    minutesAgo: "há {{count}} min",
+    hoursAgo: "há {{count}} h",
+    daysAgo: "há {{count}} d",
   },
   newWorkspace: {
     title: "Novo workspace",

@@ -5,6 +5,7 @@ import {
   formatDuration,
   formatMessageTimestamp,
   formatTimeAgo,
+  formatTimeAgoLocalized,
 } from "./time";
 
 describe("formatTimeAgo", () => {
@@ -114,5 +115,61 @@ describe("formatMessageTimestamp", () => {
     const formatted = formatMessageTimestamp(date, now);
     expect(formatted).toMatch(/Apr|April/);
     expect(formatted).toMatch(/2026/);
+  });
+});
+
+describe("formatTimeAgoLocalized", () => {
+  const now = new Date("2026-07-16T12:00:00.000Z");
+
+  it("uses the translation keys for each bucket", () => {
+    const calls: string[] = [];
+    const t = (key: string, options?: { count?: number }) => {
+      calls.push(key);
+      return options?.count !== undefined ? `${key}#${options.count}` : key;
+    };
+
+    expect(formatTimeAgoLocalized(new Date("2026-07-16T11:59:55.000Z"), now, t, "zh-CN")).toBe(
+      "timeAgo.justNow",
+    );
+    expect(formatTimeAgoLocalized(new Date("2026-07-16T11:59:30.000Z"), now, t, "zh-CN")).toBe(
+      "timeAgo.secondsAgo#30",
+    );
+    expect(formatTimeAgoLocalized(new Date("2026-07-16T11:55:00.000Z"), now, t, "zh-CN")).toBe(
+      "timeAgo.minutesAgo#5",
+    );
+    expect(formatTimeAgoLocalized(new Date("2026-07-16T10:00:00.000Z"), now, t, "zh-CN")).toBe(
+      "timeAgo.hoursAgo#2",
+    );
+    expect(formatTimeAgoLocalized(new Date("2026-07-13T12:00:00.000Z"), now, t, "zh-CN")).toBe(
+      "timeAgo.daysAgo#3",
+    );
+    expect(calls).toContain("timeAgo.justNow");
+  });
+
+  it("matches formatTimeAgo buckets when t echoes English", () => {
+    const t = (key: string, options?: { count?: number }) => {
+      if (key === "timeAgo.justNow") return "just now";
+      let unit = "d";
+      if (key.endsWith("secondsAgo")) {
+        unit = "s";
+      } else if (key.endsWith("minutesAgo")) {
+        unit = "m";
+      } else if (key.endsWith("hoursAgo")) {
+        unit = "h";
+      }
+      return `${options?.count}${unit} ago`;
+    };
+
+    const date = new Date("2026-07-13T12:00:00.000Z");
+    expect(formatTimeAgoLocalized(date, now, t, "en-US")).toBe(formatTimeAgo(date, now));
+    expect(formatTimeAgoLocalized(new Date("2026-07-16T11:55:00.000Z"), now, t, "en-US")).toBe(
+      "5m ago",
+    );
+  });
+
+  it("formats dates older than a week via the locale", () => {
+    const t = (key: string) => key;
+    const localized = formatTimeAgoLocalized(new Date("2026-01-15T12:00:00.000Z"), now, t, "en-US");
+    expect(localized).toBe(formatTimeAgo(new Date("2026-01-15T12:00:00.000Z"), now));
   });
 });

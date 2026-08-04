@@ -371,28 +371,28 @@ export const zhCN: TranslationResources = {
   },
   workspace: {
     route: {
-      loading: "正在加载 workspace",
+      loading: "正在加载工作区",
       connecting: "正在连接",
       hostOffline: "{{hostName}} 已离线",
       cannotReachHost: "无法连接 {{hostName}}",
       hostStatus: "Host 状态：{{status}}",
-      needsHostUpgrade: "更新你的 Host 以恢复此 workspace",
+      needsHostUpgrade: "更新你的 Host 以恢复此工作区",
       manageHost: "管理 Host",
       recovery: {
-        archivedTitle: "Workspace 已归档",
+        archivedTitle: "工作区已归档",
         restoreDescription:
           "{{workspaceName}} 已归档，其 worktree 已移除。恢复分支 {{branch}} 以重新打开。",
         unarchiveDescription: "{{workspaceName}} 已归档。取消归档以重新打开。",
         restoreAction: "恢复",
         unarchiveAction: "取消归档",
-        restoringTitle: "正在恢复 workspace",
+        restoringTitle: "正在恢复工作区",
         restoringAction: "正在恢复...",
-        unavailableTitle: "Workspace 不可用",
-        checkFailedTitle: "无法检查 workspace",
+        unavailableTitle: "工作区不可用",
+        checkFailedTitle: "无法检查工作区",
       },
     },
     hoverCard: {
-      scriptsAccessibility: "Workspace scripts",
+      scriptsAccessibility: "工作区脚本",
       copyPath: "复制路径",
       copyBranchName: "复制分支名称",
       copied: "已复制",
@@ -427,7 +427,7 @@ export const zhCN: TranslationResources = {
         noVisibleFiles: "没有可见文件",
       },
       states: {
-        unavailable: "Workspace 不可用",
+        unavailable: "工作区不可用",
         loading: "正在加载文件...",
       },
       errors: {
@@ -439,7 +439,7 @@ export const zhCN: TranslationResources = {
         label: "Setup",
         completed: "Setup 已完成",
         failed: "Setup 失败",
-        workspace: "Workspace setup",
+        workspace: "工作区设置",
       },
       status: {
         running: "正在运行",
@@ -447,13 +447,13 @@ export const zhCN: TranslationResources = {
         failed: "失败",
         waiting: "正在等待 setup 输出",
       },
-      waiting: "正在 setup workspace...",
+      waiting: "正在设置工作区...",
       empty: {
-        noCommands: "此 workspace 没有运行 setup 命令。",
+        noCommands: "此工作区没有运行 setup 命令。",
       },
       accessibility: {
-        noCommands: "此 workspace 没有运行 setup 命令",
-        log: "Workspace setup 日志",
+        noCommands: "此工作区没有运行 setup 命令",
+        log: "工作区设置日志",
       },
       log: {
         noOutput: "没有输出",
@@ -462,7 +462,7 @@ export const zhCN: TranslationResources = {
     browser: {
       unavailable: {
         title: "浏览器仅桌面端可用",
-        subtitle: "在 Electron 中打开此 workspace 以使用内置浏览器。",
+        subtitle: "在 Electron 中打开此工作区以使用内置浏览器。",
       },
       session: "浏览器会话 {{browserId}}",
       controls: {
@@ -509,11 +509,11 @@ export const zhCN: TranslationResources = {
       fallback: {
         newAgent: "新建 Agent",
         setup: "Setup",
-        workspaceSetup: "Workspace setup",
+        workspaceSetup: "工作区设置",
         terminal: "Terminal",
         browser: "浏览器",
         agent: "Agent",
-        workspace: "Workspace",
+        workspace: "工作区",
       },
       switcher: {
         trigger: "切换标签（已打开 {{count}} 个）",
@@ -603,20 +603,20 @@ export const zhCN: TranslationResources = {
     },
     header: {
       actions: {
-        workspaceActions: "Workspace 操作",
+        workspaceActions: "工作区操作",
         newAgent: "新建 Agent",
         newTerminal: "新建 Terminal",
         newBrowser: "新建浏览器标签",
         importSession: "导入会话",
-        copyPath: "复制 workspace 路径",
+        copyPath: "复制工作区路径",
         copyBranchName: "复制分支名称",
         showSetup: "显示 setup",
       },
       toasts: {
-        workspacePathUnavailable: "Workspace 路径尚不可用",
+        workspacePathUnavailable: "工作区路径尚不可用",
         branchNameUnavailable: "分支名称不可用",
-        terminalQueued: "正在准备 workspace，Terminal 准备好后会打开...",
-        workspacePathCopiedLabel: "Workspace 路径",
+        terminalQueued: "正在准备工作区，Terminal 准备好后会打开...",
+        workspacePathCopiedLabel: "工作区路径",
         branchNameCopiedLabel: "分支名称",
       },
     },
@@ -632,7 +632,7 @@ export const zhCN: TranslationResources = {
         view: "查看终端",
       },
       accessibility: {
-        trigger: "Workspace scripts",
+        trigger: "工作区脚本",
         openService: "查看 {{scriptName}} 服务",
         viewTerminal: "查看 {{scriptName}} Terminal",
         runScript: "运行 {{scriptName}} script",
@@ -745,7 +745,7 @@ export const zhCN: TranslationResources = {
           updateDirty: "有本地变更时无法更新，请先 commit 或 stash",
           updateCurrent: "无法更新，因为此分支已与 {{baseRef}} 保持最新",
           mergePrNoGithub: "当前无法 merge PR，因为 GitHub 未连接",
-          archiveNotWorktree: "此处无法归档，因为此 workspace 不是作为 Paseo worktree 创建的",
+          archiveNotWorktree: "此处无法归档，因为此工作区不是作为 Paseo worktree 创建的",
           mergePrNoForge: "当前无法 merge {{noun}}，因为 {{brand}} 未连接",
           mergePrMissing: "无法 merge PR，因为还没有 pull request",
           mergePrDraft: "无法 merge PR，因为 pull request 仍是 draft",
@@ -835,9 +835,9 @@ export const zhCN: TranslationResources = {
       openInEditor: {
         open: "打开",
         chooseEditor: "选择编辑器",
-        openIn: "在 {{target}} 中打开 workspace",
+        openIn: "在 {{target}} 中打开工作区",
         openFileIn: "在 {{target}} 中打开 {{fileName}}",
-        failedOpen: "打开 workspace 失败",
+        failedOpen: "打开工作区失败",
       },
       pr: {
         actions: {
@@ -933,8 +933,8 @@ export const zhCN: TranslationResources = {
       },
     },
     filter: {
-      placeholder: "筛选 workspace",
-      noResults: "没有匹配的 workspace",
+      placeholder: "筛选工作区",
+      noResults: "没有匹配的工作区",
     },
     pinned: {
       title: "已置顶",
@@ -969,6 +969,7 @@ export const zhCN: TranslationResources = {
     sections: {
       sessions: "历史",
       schedules: "计划",
+      workspaces: "工作区",
     },
     worktreeSetup: {
       title: "设置 worktree scripts",
@@ -994,7 +995,7 @@ export const zhCN: TranslationResources = {
       },
       toasts: {
         hostDisconnected: "Host 未连接",
-        removeFailed: "部分 workspace 移除失败",
+        removeFailed: "部分工作区移除失败",
         updateHostToRemove: "更新 host 以移除 projects。",
       },
       empty: {
@@ -1014,14 +1015,15 @@ export const zhCN: TranslationResources = {
         done: "完成",
       },
       actions: {
-        menu: "Workspace 操作",
-        newWorkspace: "新建 workspace",
+        menu: "工作区操作",
+        newWorkspace: "新建工作区",
         showMore: "显示更多",
         showLess: "收起",
-        createWorkspaceFor: "为 {{projectName}} 新建 workspace",
+        createWorkspaceFor: "为 {{projectName}} 新建工作区",
         copyPath: "复制路径",
         copyBranchName: "复制分支名称",
-        rename: "重命名 workspace",
+        rename: "重命名工作区",
+        markAsRead: "标记为已读",
         pin: "置顶",
         unpin: "取消置顶",
         archive: "归档",
@@ -1031,28 +1033,35 @@ export const zhCN: TranslationResources = {
         hiding: "正在隐藏...",
       },
       confirmations: {
-        hideTitle: "隐藏 workspace？",
+        hideTitle: "隐藏工作区？",
         hideMessage: "从侧边栏隐藏「{{workspaceName}}」？\n\n磁盘上的文件不会被更改。",
         hideConfirm: "隐藏",
         cancel: "取消",
       },
       rename: {
-        title: "重命名 workspace",
+        title: "重命名工作区",
         submit: "重命名",
         invalidBranchName: "无效的分支名称",
       },
       toasts: {
-        workspacePathUnavailable: "Workspace 路径不可用",
+        workspacePathUnavailable: "工作区路径不可用",
         pathCopied: "路径已复制",
         branchNameCopied: "分支名称已复制",
         hostDisconnected: "Host 未连接",
-        hideFailed: "隐藏 workspace 失败",
+        hideFailed: "隐藏工作区失败",
         archiveFailed: "归档工作区失败",
       },
     },
   },
+  timeAgo: {
+    justNow: "刚刚",
+    secondsAgo: "{{count}} 秒前",
+    minutesAgo: "{{count}} 分钟前",
+    hoursAgo: "{{count}} 小时前",
+    daysAgo: "{{count}} 天前",
+  },
   newWorkspace: {
-    title: "新建 workspace",
+    title: "新建工作区",
     create: "创建",
     isolation: {
       local: "本地",
@@ -1299,7 +1308,7 @@ export const zhCN: TranslationResources = {
     stashRestored: "Stashed 变更已恢复",
   },
   agentAutocomplete: {
-    searchingWorkspace: "正在搜索 workspace...",
+    searchingWorkspace: "正在搜索工作区...",
     loadingCommands: "正在加载 commands...",
     noFiles: "没有找到文件或目录",
     noCommands: "没有找到 commands",
@@ -1317,14 +1326,14 @@ export const zhCN: TranslationResources = {
     dialogFilterName: "图片",
   },
   workspaceSetup: {
-    title: "创建 workspace",
+    title: "创建工作区",
     errors: {
       failedCreateWorktree: "创建 worktree 失败",
       failedOpenProject: "打开 project 失败",
       selectModel: "请选择模型",
       hostDisconnected: "Host 未连接",
-      pendingRequired: "没有待处理的 workspace setup",
-      composerStateRequired: "Workspace setup composer 状态必填",
+      pendingRequired: "没有待处理的工作区设置",
+      composerStateRequired: "工作区设置 composer 状态必填",
     },
   },
   onboarding: {
@@ -1382,7 +1391,7 @@ export const zhCN: TranslationResources = {
       noProviders: "所选 Host 上没有可用的 provider",
       modelDefaultsLoading: "模型默认值仍在加载",
       noModelAvailable: "所选 provider 没有可用模型",
-      workspaceDirectoryNotFound: "Workspace 目录未找到",
+      workspaceDirectoryNotFound: "工作区目录未找到",
       hostDisconnected: "Host 未连接",
     },
   },
@@ -1558,7 +1567,7 @@ export const zhCN: TranslationResources = {
       creatingAgent: "正在创建 Agent",
     },
     file: {
-      directoryMissing: "未找到 workspace 目录。",
+      directoryMissing: "未找到工作区目录。",
       loading: "正在加载文件...",
       noPreview: "没有可用预览",
       binaryPreviewUnavailable: "二进制预览不可用",
@@ -1592,7 +1601,7 @@ export const zhCN: TranslationResources = {
       commitSubtitle: "提交差异",
       uncommittedSubtitle: "未提交的更改",
       baseSubtitle: "与 {{baseRef}} 比较",
-      directoryMissing: "未找到 workspace 目录。",
+      directoryMissing: "未找到工作区目录。",
       empty: "没有更改",
       loadError: "加载差异失败",
       capabilityMissing: "请更新主机以查看提交差异。",
@@ -1698,7 +1707,7 @@ export const zhCN: TranslationResources = {
       projects: "项目",
       connections: "连接",
       agents: "Agents",
-      workspaces: "Workspaces",
+      workspaces: "工作区",
       providers: "Providers",
       usage: "使用情况",
       terminals: "Terminals",
@@ -1892,15 +1901,15 @@ export const zhCN: TranslationResources = {
       },
       help: {
         openProject: "打开项目",
-        newWorkspace: "新建 workspace",
+        newWorkspace: "新建工作区",
         newWorktree: "新建 worktree",
         archiveWorkspace: "归档工作区",
         newTab: "新建标签",
         closeCurrentTab: "关闭当前标签",
-        jumpToWorkspace: "跳转到 workspace",
+        jumpToWorkspace: "跳转到工作区",
         jumpToTab: "跳转到标签",
-        previousWorkspace: "上一个 workspace",
-        nextWorkspace: "下一个 workspace",
+        previousWorkspace: "上一个工作区",
+        nextWorkspace: "下一个工作区",
         previousTab: "上一个标签",
         nextTab: "下一个标签",
         splitPaneRight: "向右拆分窗格",
@@ -2078,7 +2087,7 @@ export const zhCN: TranslationResources = {
         unavailable: "连接到这个 Host 以管理 Agent",
       },
       workspaces: {
-        unavailable: "连接到这个 Host 以管理 Workspace",
+        unavailable: "连接到这个 Host 以管理工作区",
       },
       terminalProfiles: {
         unavailable: "Connect to this host to manage terminal profiles",

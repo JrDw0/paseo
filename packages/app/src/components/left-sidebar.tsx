@@ -33,6 +33,12 @@ import { SidebarHelpMenu } from "@/components/sidebar/sidebar-help-menu";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { HEADER_INNER_HEIGHT, useIsCompactFormFactor } from "@/constants/layout";
 import { useOpenAddProject } from "@/hooks/use-open-add-project";
 import { useShortcutKeys } from "@/hooks/use-shortcut-keys";
@@ -711,6 +717,25 @@ function MobileSidebar({
     router.push(buildNewWorkspaceRoute());
   }, [closeSidebar]);
 
+  const fabSizeStyle = useMemo(() => ({ width: 56, height: 56 }), []);
+  const fabTriggerStyle = useCallback(
+    ({ pressed }: PressableStateCallbackType) => [
+      styles.mobileCircleButton,
+      fabSizeStyle,
+      styles.mobileCircleButtonAccent,
+      pressed && styles.mobileCircleButtonPressed,
+    ],
+    [fabSizeStyle],
+  );
+  const fabPlusSmallIcon = useMemo(
+    () => <Plus size={14} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted],
+  );
+  const fabMainPlusIcon = useMemo(
+    () => <Plus size={theme.iconSize.lg} color={theme.colors.accentForeground} />,
+    [theme.colors.accentForeground, theme.iconSize.lg],
+  );
+
   const mobileSidebarInsetStyle = useMemo(
     () => ({
       paddingTop: insetsTop,
@@ -731,7 +756,7 @@ function MobileSidebar({
       <View style={styles.sidebarContent} pointerEvents="auto">
         <WindowChromeSafeArea placement="below" />
 
-        {/* Top nav row: circular icon buttons (settings/home/add-project) + filter toggle */}
+        {/* Top nav row: circular icon buttons (settings/home) + filter toggle */}
         <View style={styles.mobileTopNavRow}>
           <MobileNavIconButton
             icon={Settings}
@@ -746,13 +771,6 @@ function MobileSidebar({
             onPress={handleHomePress}
             size={48}
             testID="sidebar-mobile-home"
-          />
-          <MobileNavIconButton
-            icon={FolderPlus}
-            label={labels.addProject}
-            onPress={handleAddProjectPress}
-            size={48}
-            testID="sidebar-mobile-add-project"
           />
           <View style={styles.mobileTopNavSpacer} />
           <MobileNavIconButton
@@ -819,17 +837,27 @@ function MobileSidebar({
           />
         )}
 
-        {/* Footer: circular thumb-reach actions — import on the left, new-workspace FAB on the right */}
+        {/* Footer: circular thumb-reach actions — import on the left, new-workspace/add-project FAB menu on the right */}
         <View style={styles.mobileFooter}>
           <MobileSidebarImportButton onBeforeNavigate={closeSidebar} />
-          <MobileNavIconButton
-            icon={Plus}
-            label={labels.newWorkspace}
-            onPress={handleNewWorkspace}
-            size={56}
-            accent
-            testID="sidebar-footer-new-workspace"
-          />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              style={fabTriggerStyle}
+              accessibilityRole="button"
+              accessibilityLabel={labels.newWorkspace}
+              testID="sidebar-footer-new-workspace"
+            >
+              {fabMainPlusIcon}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" width={220}>
+              <DropdownMenuItem leading={fabPlusSmallIcon} onSelect={handleNewWorkspace}>
+                {labels.newWorkspace}
+              </DropdownMenuItem>
+              <DropdownMenuItem leading={fabPlusSmallIcon} onSelect={handleAddProjectPress}>
+                {labels.addProject}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </View>
       </View>
     </MobilePanelOverlay>
@@ -863,14 +891,15 @@ function MobileNavIconButton({
       styles.mobileCircleButton,
       { width: size, height: size },
       accent && styles.mobileCircleButtonAccent,
-      active && !accent && styles.mobileCircleButtonActive,
       pressed && styles.mobileCircleButtonPressed,
       disabled && styles.mobileNavIconButtonDisabled,
     ],
-    [active, accent, disabled, size],
+    [accent, disabled, size],
   );
   const iconSize = size >= 48 ? theme.iconSize.lg : theme.iconSize.md;
-  let iconColor = active ? theme.colors.foreground : theme.colors.foregroundMuted;
+  // On-state is a colored icon, not a filled circle: only the accent CTA (FAB)
+  // may own a filled accent surface. See docs/design.md §6 "one accent CTA per surface".
+  let iconColor = active ? theme.colors.accent : theme.colors.foregroundMuted;
   if (accent) {
     iconColor = theme.colors.accentForeground;
   }
@@ -902,7 +931,7 @@ function MobileFilterInput({
   const { t } = useTranslation();
   return (
     <View style={styles.mobileFilterField}>
-      <Search size={12} color={theme.colors.foregroundMuted} />
+      <Search size={16} color={theme.colors.foregroundMuted} />
       <TextInput
         value={filterText}
         onChangeText={setFilterText}
@@ -1094,6 +1123,7 @@ function DesktopSidebar({
 
 function WorkspacesSectionHeader() {
   const { theme } = useUnistyles();
+  const { t } = useTranslation();
   const isCompactLayout = useIsCompactFormFactor();
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
   const commandCenterKeys = useShortcutKeys("toggle-command-center");
@@ -1112,14 +1142,14 @@ function WorkspacesSectionHeader() {
   if (isCompactLayout) {
     return (
       <View style={styles.workspacesSectionHeader}>
-        <Text style={styles.workspacesSectionTitle}>Workspaces</Text>
+        <Text style={styles.workspacesSectionTitle}>{t("sidebar.sections.workspaces")}</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.workspacesSectionHeader}>
-      <Text style={styles.workspacesSectionTitle}>Workspaces</Text>
+      <Text style={styles.workspacesSectionTitle}>{t("sidebar.sections.workspaces")}</Text>
       <View style={styles.workspacesSectionActions}>
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
@@ -1302,15 +1332,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    paddingVertical: theme.spacing[2],
   },
   mobileFilterRow: {
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
   },
   mobileSecondaryRow: {
     flexDirection: "row",
@@ -1340,9 +1366,6 @@ const styles = StyleSheet.create((theme) => ({
   mobileCircleButtonAccent: {
     backgroundColor: theme.colors.accent,
   },
-  mobileCircleButtonActive: {
-    backgroundColor: theme.colors.accentBright,
-  },
   mobileCircleButtonPressed: {
     opacity: 0.82,
   },
@@ -1357,10 +1380,12 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
     flex: 1,
-    height: 36,
+    height: 40,
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
   },
   mobileFilterInput: {
     flex: 1,

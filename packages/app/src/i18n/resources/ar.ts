@@ -977,6 +977,7 @@ export const ar: TranslationResources = {
     sections: {
       sessions: "السجل",
       schedules: "الجداول",
+      workspaces: "مساحات العمل",
     },
     worktreeSetup: {
       title: "إعداد البرامج النصية لشجرة العمل",
@@ -1032,6 +1033,7 @@ export const ar: TranslationResources = {
         copyPath: "نسخ المسار",
         copyBranchName: "انسخ اسم الفرع",
         rename: "إعادة تسمية مساحة العمل",
+        markAsRead: "تعيين كمقروء",
         pin: "تثبيت في الأعلى",
         unpin: "إلغاء التثبيت",
         archive: "أرشيف",
@@ -1061,6 +1063,13 @@ export const ar: TranslationResources = {
         archiveFailed: "فشل في أرشفة مساحة العمل",
       },
     },
+  },
+  timeAgo: {
+    justNow: "الآن",
+    secondsAgo: "منذ {{count}} ث",
+    minutesAgo: "منذ {{count}} د",
+    hoursAgo: "منذ {{count}} س",
+    daysAgo: "منذ {{count}} يوم",
   },
   newWorkspace: {
     title: "مساحة عمل جديدة",

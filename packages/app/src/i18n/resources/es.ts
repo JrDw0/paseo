@@ -1008,6 +1008,7 @@ export const es: TranslationResources = {
     sections: {
       sessions: "Historial",
       schedules: "Horarios",
+      workspaces: "Espacios de trabajo",
     },
     worktreeSetup: {
       title: "Configurar secuencias de comandos del árbol de trabajo",
@@ -1063,6 +1064,7 @@ export const es: TranslationResources = {
         copyPath: "Copiar ruta",
         copyBranchName: "Copiar nombre de sucursal",
         rename: "Cambiar nombre del espacio de trabajo",
+        markAsRead: "Marcar como leído",
         pin: "Anclar arriba",
         unpin: "Desanclar",
         archive: "Archivo",
@@ -1092,6 +1094,13 @@ export const es: TranslationResources = {
         archiveFailed: "No se pudo archivar el espacio de trabajo",
       },
     },
+  },
+  timeAgo: {
+    justNow: "ahora mismo",
+    secondsAgo: "hace {{count}} s",
+    minutesAgo: "hace {{count}} min",
+    hoursAgo: "hace {{count}} h",
+    daysAgo: "hace {{count}} d",
   },
   newWorkspace: {
     title: "Nuevo espacio de trabajo",
