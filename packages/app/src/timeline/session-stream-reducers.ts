@@ -522,6 +522,11 @@ function acceptOlderTimelineUnits(args: {
   };
 }
 
+// 根因 C(档 3 评估后未改,收益小): 翻页 prepend 每条路径都要产出 one combined
+// array,[...olderTail, ...currentTail] 的 O(M) 引用拷贝对 plain-array 数据模型不可
+// 避免;merge 分支多付的两次 slice 也只在边界同 callId / assistant-assistant 时发生,
+// 且整函数每次翻页手势只跑一次(页上限 ~600 条)。真正消除 O(M) 需要换持久化/分块
+// 数据结构,远超档 3 范围 — 此处不值得为省一次 memmove 级拷贝引入任何复杂度。
 function mergePrependedCanonicalTail(olderTail: StreamItem[], currentTail: StreamItem[]) {
   if (olderTail.length === 0) {
     return currentTail;
@@ -1480,6 +1485,12 @@ export function createSessionAgentStreamReducerQueue(
       };
     },
     commit: (agentId, result, events) => {
+      // 根因 D(档 3 核对后未改): 本函数名义上有三个独立 store setter
+      // (setAgentStreamState / setAgentTimelineCursor / setAgents),每个各自触发
+      // 一次 set+notify;但三者都已按 changed* 标志门控,48ms flush 的常见路径只命
+      // 中第一个(stream state 一次性批量 patch,cursor/agent 仅在序列推进或
+      // lifecycle 变化时才写)。折叠成单次 set 需要 session-store 新增合并 setter,
+      // 收益微小,不动。
       if (result.changedTail || result.changedHead) {
         setAgentStreamState(serverId, agentId, {
           ...(result.changedTail ? { tail: result.tail } : {}),

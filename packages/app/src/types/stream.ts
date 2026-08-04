@@ -1141,6 +1141,24 @@ function promoteCompletedAssistantBlocks(params: { tail: StreamItem[]; head: Str
   };
 }
 
+// 根因 A: promoteCompletedAssistantBlocks 在流式 assistant 的每个事件后都会调
+// flushHeadToTail(只要文本够出 2 个 markdown block),而 deep session 的 tail 可
+// 达数万条 — 每次 new Set(tail.map(id)) 是 O(M),直接打进 48ms flush 热路径。
+// tail 数组发布后从不原地改(所有写入点都先 [...copy] 再改),所以按数组引用缓存
+// 它的 id 集是安全的;WeakMap 让被 store 丢弃的旧 tail 的缓存随 GC 回收。
+const tailIdsCache = new WeakMap<StreamItem[], Set<string>>();
+
+function getTailIds(tail: StreamItem[]): Set<string> {
+  const cached = tailIdsCache.get(tail);
+  if (cached) {
+    return cached;
+  }
+  // 同一 tail 引用只付一次 O(M) 建集;streaming head 滚动期间 tail 引用不变,零成本。
+  const ids = new Set(tail.map((item) => item.id));
+  tailIdsCache.set(tail, ids);
+  return ids;
+}
+
 /**
  * Flush head items to tail, avoiding duplicates.
  */
@@ -1150,14 +1168,22 @@ export function flushHeadToTail(tail: StreamItem[], head: StreamItem[]): StreamI
   }
 
   const finalized = finalizeHeadItems(head);
-  const tailIds = new Set(tail.map((item) => item.id));
+  const tailIds = getTailIds(tail);
   const newItems = finalized.filter((item) => !tailIds.has(item.id));
 
   if (newItems.length === 0) {
     return tail;
   }
 
-  return [...tail, ...newItems];
+  const nextTail = [...tail, ...newItems];
+  // 同上(根因 A): 新 tail 的 id 集在旧集上增量添加,避免下一次 flushHeadToTail
+  // 再为这同一个新引用付一次全量 O(M) 重建。newItems 通常是个位数。
+  const nextIds = new Set(tailIds);
+  for (const item of newItems) {
+    nextIds.add(item.id);
+  }
+  tailIdsCache.set(nextTail, nextIds);
+  return nextTail;
 }
 
 /**
