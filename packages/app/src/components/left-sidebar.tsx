@@ -30,7 +30,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { resolveDesktopSidebarWidth } from "@/components/desktop-sidebar-layout";
 import { HostPicker } from "@/components/hosts/host-picker";
@@ -65,6 +65,7 @@ import { useHosts } from "@/runtime/host-runtime";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { usePanelStore } from "@/stores/panel-store";
+import type { Theme } from "@/styles/theme";
 import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
@@ -682,6 +683,10 @@ function MobileSidebar({
   // The filter row expands/collapses with a height+opacity transition instead
   // of popping the whole list by one row height. Content mounts only while the
   // row is visible or animating, so TextInput autoFocus still works.
+  //
+  // The reveal wrapper is an Animated.View: keep its static clip on the
+  // plain-RN staticStyles lane so the Unistyles ShadowRegistry never touches
+  // the native node Reanimated also drives (docs/unistyles.md crash).
   const filterRowProgress = useSharedValue(showFilterInput ? 1 : 0);
   const [renderFilterRow, setRenderFilterRow] = useState(showFilterInput);
   useEffect(() => {
@@ -821,7 +826,7 @@ function MobileSidebar({
         </View>
 
         {renderFilterRow ? (
-          <Animated.View style={[styles.mobileFilterRowReveal, filterRowRevealStyle]}>
+          <Animated.View style={[staticStyles.mobileFilterRowReveal, filterRowRevealStyle]}>
             <View style={styles.mobileFilterRow}>
               <MobileFilterInput
                 filterText={filterText}
@@ -1184,20 +1189,20 @@ function WorkspacesSectionHeader() {
         <Text style={styles.workspacesSectionTitle}>{t("sidebar.sections.workspaces")}</Text>
         <View style={styles.workspacesSectionActions}>
           <SectionHeaderNavButton
-            icon={History}
+            icon={ThemedHistory}
             label={t("sidebar.sections.sessions")}
             onPress={handleSessionsPress}
             active={isSessionsActive}
             testID="sidebar-sessions"
           />
           <SectionHeaderNavButton
-            icon={CalendarClock}
+            icon={ThemedCalendarClock}
             label={t("sidebar.sections.schedules")}
             onPress={handleSchedulesPress}
             active={isSchedulesActive}
             testID="sidebar-schedules"
           />
-          <SidebarDisplayPreferencesMenu />
+          <SidebarDisplayPreferencesMenu circular />
         </View>
       </View>
     );
@@ -1246,6 +1251,14 @@ function WorkspacesSectionHeader() {
   );
 }
 
+const ThemedHistory = withUnistyles(History);
+const ThemedCalendarClock = withUnistyles(CalendarClock);
+// The icon color follows interaction state, not just theme, so each state gets
+// its own uniProps mapping (the useUnistyles hook is banned — docs/unistyles.md).
+const navIconMutedMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const navIconAccentMapping = (theme: Theme) => ({ color: theme.colors.accentBright });
+const navIconForegroundMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+
 // Demoted-chrome nav button for the compact workspaces header: muted, bright
 // accent icon when its destination is the active route. Still a 32px target —
 // the header is dense but these stay reachable by thumb.
@@ -1256,13 +1269,12 @@ function SectionHeaderNavButton({
   active,
   testID,
 }: {
-  icon: typeof History;
+  icon: typeof ThemedHistory;
   label: string;
   onPress: () => void;
   active: boolean;
   testID: string;
 }) {
-  const { theme } = useUnistyles();
   const buttonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.workspacesHeaderIconButton,
@@ -1280,13 +1292,13 @@ function SectionHeaderNavButton({
       testID={testID}
     >
       {({ hovered, pressed }) => {
-        let color = theme.colors.foregroundMuted;
+        let uniProps = navIconMutedMapping;
         if (active) {
-          color = theme.colors.accentBright;
+          uniProps = navIconAccentMapping;
         } else if (hovered || pressed) {
-          color = theme.colors.foreground;
+          uniProps = navIconForegroundMapping;
         }
-        return <Icon size={15} color={color} />;
+        return <Icon size={15} uniProps={uniProps} />;
       }}
     </Pressable>
   );
@@ -1305,6 +1317,9 @@ const staticStyles = RNStyleSheet.create({
   },
   desktopSidebarHidden: {
     display: "none",
+  },
+  mobileFilterRowReveal: {
+    overflow: "hidden",
   },
 });
 
@@ -1448,9 +1463,6 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     height: MOBILE_FILTER_ROW_HEIGHT,
     paddingHorizontal: theme.spacing[4],
-  },
-  mobileFilterRowReveal: {
-    overflow: "hidden",
   },
   mobileFooter: {
     flexDirection: "row",

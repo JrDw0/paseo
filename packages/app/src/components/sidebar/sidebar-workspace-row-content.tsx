@@ -299,25 +299,49 @@ function WorkspaceStatusIndicator({
   // sidebar is a dot, and a row with a project icon simply moves that dot onto the icon.
   // A row starting up and a row working are both busy, so they share the dot and differ only
   // in testID.
+  const { t } = useTranslation();
+  // The dot/icon conveys the bucket by color and shape alone; announce it so
+  // VoiceOver and color-blind users get the status as words, not just a tint.
+  const statusLabelKey = {
+    needs_input: "needsInput",
+    failed: "failed",
+    attention: "attention",
+    running: "running",
+    done: "done",
+  }[bucket];
+  const statusLabel = t(`sidebar.workspace.status.${statusLabelKey}`);
+
   if (loading) {
     return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-loading">
-        <View style={styles.standaloneRunningDot} />
+      <View
+        style={styles.workspaceStatusDot}
+        accessibilityLabel={statusLabel}
+        testID="workspace-status-indicator-loading"
+      >
+        <PulsingStatusDot style={styles.standaloneRunningDot} />
       </View>
     );
   }
 
   if (shouldRenderSyncedStatusLoader({ bucket })) {
     return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-running">
-        <View style={styles.standaloneRunningDot} />
+      <View
+        style={styles.workspaceStatusDot}
+        accessibilityLabel={statusLabel}
+        testID="workspace-status-indicator-running"
+      >
+        <PulsingStatusDot style={styles.standaloneRunningDot} />
       </View>
     );
   }
 
   if (bucket === "needs_input") {
     return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-needs_input">
+      <View
+        style={styles.workspaceStatusDot}
+        accessibilityLabel={statusLabel}
+        testID="workspace-status-indicator-needs_input"
+      >
         <ThemedCircleAlert size={compact ? 16 : 14} uniProps={needsInputColorMapping} />
       </View>
     );
@@ -325,7 +349,11 @@ function WorkspaceStatusIndicator({
 
   if (bucket === "attention") {
     return (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-attention">
+      <View
+        style={styles.workspaceStatusDot}
+        accessibilityLabel={statusLabel}
+        testID="workspace-status-indicator-attention"
+      >
         <View style={[styles.standaloneStatusDot, compact && styles.standaloneStatusDotCompact]} />
       </View>
     );
@@ -337,7 +365,11 @@ function WorkspaceStatusIndicator({
     // edge to read against — a workspace carrying its own glyph starts looking like a project
     // header. The dot is muted to half opacity so it holds the rail without reporting status.
     return reserveIdleSpace ? (
-      <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-done">
+      <View
+        style={styles.workspaceStatusDot}
+        accessibilityLabel={statusLabel}
+        testID="workspace-status-indicator-done"
+      >
         <View style={styles.idleStatusDot} />
       </View>
     ) : null;
@@ -354,7 +386,11 @@ function WorkspaceStatusIndicator({
     compact,
   );
   return (
-    <View style={styles.workspaceStatusDot} testID={`workspace-status-indicator-${bucket}`}>
+    <View
+      style={styles.workspaceStatusDot}
+      accessibilityLabel={statusLabel}
+      testID={`workspace-status-indicator-${bucket}`}
+    >
       <KindIcon size={compact ? 16 : 14} uniProps={foregroundMutedColorMapping} />
       {dotColorStyle ? (
         <StatusDotOverlay

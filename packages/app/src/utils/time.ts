@@ -87,8 +87,21 @@ function timeAgoDiffs(date: Date, now: Date): {
   return { diffSec, diffMin, diffHour, diffDay };
 }
 
+// `date.toLocaleDateString` builds a fresh Intl.DateTimeFormat every call, which
+// relative-time rows hit once per row per render. The locale set is tiny, so cache
+// the formatter per locale tag (same as getTimeFormatter below).
+const monthDayFormatters = new Map<string, Intl.DateTimeFormat>();
+function getMonthDayFormatter(locale: string): Intl.DateTimeFormat {
+  let formatter = monthDayFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" });
+    monthDayFormatters.set(locale, formatter);
+  }
+  return formatter;
+}
+
 function formatShortMonthDay(date: Date, locale: string): string {
-  return date.toLocaleDateString(locale, { month: "short", day: "numeric" });
+  return getMonthDayFormatter(locale).format(date);
 }
 
 /**

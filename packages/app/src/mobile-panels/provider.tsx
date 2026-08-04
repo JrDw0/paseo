@@ -46,9 +46,14 @@ const SPRING_MASS = 1;
 // settles back — a constrained rubber-band, not a wall.
 const OVERRUN_DAMPING = 0.35;
 const OVERRUN_LIMIT = 0.06;
-// Fed-in release velocity is capped in position units/s so a rage-fling bounces
-// slightly past the anchor instead of overshooting wildly.
-const MAX_SETTLE_VELOCITY = 6;
+// A fling's traversal speed is carried by the spring stiffness itself — from
+// rest a full-panel swing already reaches ~5 units/s — so the fed release
+// velocity mostly sets the settle bounce, not the speed. Overshoot past the
+// anchor ≈ velocity / ω_d, and with damping 22 / stiffness 200 the damped
+// frequency ω_d ≈ 8.9. Capping at 0.55 lands that bounce at ≈ OVERRUN_LIMIT
+// (6%); the old 6 units/s let a rage-fling rubber-band ~⅔ of the window
+// off-screen before settling back.
+const MAX_SETTLE_VELOCITY = 0.55;
 
 const LEFT_PANEL_MASK = 1;
 const RIGHT_PANEL_MASK = 2;
