@@ -742,8 +742,12 @@ function StatusWorkspaceRowInner({
               disabled={isArchiving}
               accessibilityRole="button"
               accessibilityState={accessibilityState}
-              style={workspaceRowStyle}
+              // Touch-down must read on native where hover never fires, so the pressed state
+              // gets a tint one shade deeper than hover (surface2). A style fn feeds the context
+              // trigger's pressed state through — the trigger is the only place that knows it.
+              style={(state) => [...workspaceRowStyle, state.pressed && styles.workspaceRowPressed]}
               highlightStyle={styles.workspaceRowHovered}
+
               onPress={onPress}
               testID={`sidebar-workspace-row-${workspace.workspaceKey}`}
             >

@@ -194,6 +194,7 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface4,
   },
   mobileFooterCirclePressed: {
-    opacity: 0.82,
+    opacity: 0.88,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
 }));

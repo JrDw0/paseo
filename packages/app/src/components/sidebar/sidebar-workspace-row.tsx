@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState, type Ref } from "react";
+import { memo, useCallback, useMemo, useState, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { View, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -324,7 +324,10 @@ function WorkspaceRowBody({
               aria-selected={selected}
               accessibilityRole="button"
               accessibilityState={accessibilityState}
-              style={workspaceRowStyle}
+              // Touch-down must read on native where hover never fires, so the pressed state
+              // gets a tint one shade deeper than hover (surface2). A style fn feeds the context
+              // trigger's pressed state through — the trigger is the only place that knows it.
+              style={(state) => [...workspaceRowStyle, state.pressed && styles.workspaceRowPressed]}
               highlightStyle={styles.workspaceRowHovered}
               onPressIn={draggable ? interaction.handlePressIn : undefined}
               onTouchMove={draggable ? interaction.handleTouchMove : undefined}
@@ -494,6 +497,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceRowHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  workspaceRowPressed: {
+    backgroundColor: theme.colors.surface2,
   },
   workspaceRowDragging: {
     backgroundColor: theme.colors.surface2,

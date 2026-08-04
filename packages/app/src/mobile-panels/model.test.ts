@@ -180,4 +180,18 @@ describe("mobile panel ownership", () => {
       rightTranslateX: 600,
     });
   });
+
+  it("passes overdrag overshoot to translateX while pinning backdrop opacity", () => {
+    const leftOver = getMobilePanelFrame(-1.05, 400);
+    expect(leftOver.leftBackdropOpacity).toBe(1);
+    expect(leftOver.leftTranslateX).toBeCloseTo(20);
+    expect(leftOver.rightBackdropOpacity).toBe(0);
+    expect(leftOver.rightTranslateX).toBe(400);
+
+    const rightOver = getMobilePanelFrame(1.05, 400);
+    expect(rightOver.leftBackdropOpacity).toBe(0);
+    expect(rightOver.leftTranslateX).toBe(-400);
+    expect(rightOver.rightBackdropOpacity).toBe(1);
+    expect(rightOver.rightTranslateX).toBeCloseTo(-20);
+  });
 });

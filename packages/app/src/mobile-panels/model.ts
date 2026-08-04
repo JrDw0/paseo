@@ -145,11 +145,12 @@ export function isMobilePanelGestureCurrent(
 
 export function getMobilePanelFrame(position: number, width: number) {
   "worklet";
-  const clampedPosition = Math.max(-1, Math.min(1, position));
+  // Overdrag overshoot (provider's damped overrun past ±1) reads through
+  // translateX as a small rubber-band; backdrop opacity stays pinned to [0, 1].
   return {
-    leftBackdropOpacity: Math.max(0, -clampedPosition),
-    leftTranslateX: -Math.min(1, clampedPosition + 1) * width,
-    rightBackdropOpacity: Math.max(0, clampedPosition),
-    rightTranslateX: Math.min(1, 1 - clampedPosition) * width,
+    leftBackdropOpacity: Math.min(1, Math.max(0, -position)),
+    leftTranslateX: -Math.min(1, position + 1) * width,
+    rightBackdropOpacity: Math.min(1, Math.max(0, position)),
+    rightTranslateX: Math.min(1, 1 - position) * width,
   };
 }

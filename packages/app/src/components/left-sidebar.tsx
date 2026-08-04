@@ -23,7 +23,12 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
@@ -640,6 +645,10 @@ function SidebarFooter({
   );
 }
 
+// Filter field (40) + the row's inset breathing room; styles.mobileFilterRow
+// fixes its height to this so the reveal wrapper animates the same number.
+const MOBILE_FILTER_ROW_HEIGHT = 56;
+
 function MobileSidebar({
   theme,
   statusGroups,
@@ -668,6 +677,29 @@ function MobileSidebar({
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
   const dragGestureHostPresented = useIsMobilePanelPresented("agent-list");
   const [isFilterInputVisible, setIsFilterInputVisible] = useState(false);
+  const showFilterInput = isFilterInputVisible || filterText.length > 0;
+
+  // The filter row expands/collapses with a height+opacity transition instead
+  // of popping the whole list by one row height. Content mounts only while the
+  // row is visible or animating, so TextInput autoFocus still works.
+  const filterRowProgress = useSharedValue(showFilterInput ? 1 : 0);
+  const [renderFilterRow, setRenderFilterRow] = useState(showFilterInput);
+  useEffect(() => {
+    if (showFilterInput) {
+      setRenderFilterRow(true);
+      filterRowProgress.value = withTiming(1, { duration: 180 });
+      return;
+    }
+    filterRowProgress.value = withTiming(0, { duration: 180 }, (finished) => {
+      if (finished) {
+        runOnJS(setRenderFilterRow)(false);
+      }
+    });
+  }, [showFilterInput, filterRowProgress]);
+  const filterRowRevealStyle = useAnimatedStyle(() => ({
+    height: MOBILE_FILTER_ROW_HEIGHT * filterRowProgress.value,
+    opacity: filterRowProgress.value,
+  }));
 
   const handleCloseFilterInput = useCallback(() => {
     setFilterText("");
@@ -726,7 +758,7 @@ function MobileSidebar({
       styles.mobileCircleButton,
       fabSizeStyle,
       styles.mobileCircleButtonAccent,
-      pressed && styles.mobileCircleButtonPressed,
+      pressed && styles.mobileCircleButtonAccentPressed,
     ],
     [fabSizeStyle],
   );
@@ -751,8 +783,6 @@ function MobileSidebar({
     }),
     [insetsTop, insetsBottom, theme.colors.surfaceSidebar],
   );
-
-  const showFilterInput = isFilterInputVisible || filterText.length > 0;
 
   return (
     <MobilePanelOverlay
@@ -790,21 +820,23 @@ function MobileSidebar({
           />
         </View>
 
-        {showFilterInput ? (
-          <View style={styles.mobileFilterRow}>
-            <MobileFilterInput
-              filterText={filterText}
-              setFilterText={setFilterText}
-              theme={theme}
-            />
-            <MobileNavIconButton
-              icon={X}
-              label={labels.closeFilter}
-              onPress={handleCloseFilterInput}
-              size={40}
-              testID="sidebar-mobile-filter-close"
-            />
-          </View>
+        {renderFilterRow ? (
+          <Animated.View style={[styles.mobileFilterRowReveal, filterRowRevealStyle]}>
+            <View style={styles.mobileFilterRow}>
+              <MobileFilterInput
+                filterText={filterText}
+                setFilterText={setFilterText}
+                theme={theme}
+              />
+              <MobileNavIconButton
+                icon={X}
+                label={labels.closeFilter}
+                onPress={handleCloseFilterInput}
+                size={40}
+                testID="sidebar-mobile-filter-close"
+              />
+            </View>
+          </Animated.View>
         ) : null}
 
         {isInitialLoad && !hasActiveHostFilter ? (
@@ -1405,12 +1437,17 @@ const styles = StyleSheet.create((theme) => ({
   },
   // Sits on the same 16px rail as the top nav row and the workspaces section
   // header below it (docs/design.md §8 — off the rail reads as unconsidered).
+  // Fixed height must match MOBILE_FILTER_ROW_HEIGHT — the reveal wrapper
+  // animates that exact value.
   mobileFilterRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+    height: MOBILE_FILTER_ROW_HEIGHT,
     paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[2],
+  },
+  mobileFilterRowReveal: {
+    overflow: "hidden",
   },
   mobileFooter: {
     flexDirection: "row",
@@ -1431,8 +1468,15 @@ const styles = StyleSheet.create((theme) => ({
   mobileCircleButtonAccent: {
     backgroundColor: theme.colors.accent,
   },
+  // Neutral pressed: tint the disc a shade deeper, not just a global dim.
   mobileCircleButtonPressed: {
-    opacity: 0.82,
+    opacity: 0.88,
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  // The FAB's accent fill can't darken this way; press reads as a small dip.
+  mobileCircleButtonAccentPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.96 }],
   },
   mobileNavIconButtonDisabled: {
     opacity: 0.4,

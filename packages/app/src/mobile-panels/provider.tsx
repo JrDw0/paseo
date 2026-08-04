@@ -14,9 +14,8 @@ import { Keyboard, useWindowDimensions } from "react-native";
 import type { GestureType } from "react-native-gesture-handler";
 import {
   cancelAnimation,
-  Easing,
   useSharedValue,
-  withTiming,
+  withSpring,
   type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN, scheduleOnUI } from "react-native-worklets";
@@ -37,8 +36,16 @@ import {
   type MobilePanelTransition,
 } from "./model";
 
-const ANIMATION_DURATION = 220;
-const ANIMATION_EASING = Easing.bezier(0.25, 0.1, 0.25, 1);
+// Slightly underdamped drawer spring: fast, with a small settle bounce so the
+// panel reads as physical rather than a fixed-timer move. Gesture release feeds
+// its velocity in so a fling keeps the finger's momentum (things/Fantastical feel).
+const SPRING_DAMPING = 22;
+const SPRING_STIFFNESS = 200;
+const SPRING_MASS = 1;
+// Released past an anchor, position keeps a damped overrun before the spring
+// settles back — a constrained rubber-band, not a wall.
+const OVERRUN_DAMPING = 0.35;
+const OVERRUN_LIMIT = 0.06;
 const LEFT_PANEL_MASK = 1;
 const RIGHT_PANEL_MASK = 2;
 
@@ -76,6 +83,8 @@ interface FinishGestureInput {
   startedRevision: number;
   success: boolean;
   target: MobilePanelView;
+  /** Finger release velocity in px/s; routed into the settle spring so flings keep momentum. */
+  velocityX?: number;
 }
 
 const MobilePanelsContext = createContext<MobilePanelsRuntime | null>(null);
@@ -122,16 +131,25 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const animateTransition = useCallback(
-    (transition: MobilePanelTransition) => {
+    (transition: MobilePanelTransition, velocityPositionUnits = 0) => {
       "worklet";
       if (!transition.animationTarget) {
         return;
       }
       const target = transition.animationTarget;
       const revision = transition.state.revision;
-      position.value = withTiming(
+      position.value = withSpring(
         getMobilePanelAnchor(target),
-        { duration: ANIMATION_DURATION, easing: ANIMATION_EASING },
+        {
+          damping: SPRING_DAMPING,
+          stiffness: SPRING_STIFFNESS,
+          mass: SPRING_MASS,
+          // Position is normalized to window width, so px/s becomes units/s.
+          velocity: velocityPositionUnits,
+          // Settle once the remaining travel is below ~0.1% of the window so the
+          // spring doesn't run a long invisible micro-bounce tail.
+          energyThreshold: 0.0001,
+        },
         (finished) => {
           if (!finished) {
             return;
@@ -165,7 +183,7 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
         return;
       }
       motionState.value = transition.state;
-      animateTransition(transition);
+      animateTransition(transition, 0);
     },
     [animateTransition, motionState],
   );
@@ -211,14 +229,25 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
       if (!isMobilePanelGestureCurrent(motionState.value, startedRevision)) {
         return false;
       }
-      position.value = Math.max(-1, Math.min(1, nextPosition));
+      let bounded = nextPosition;
+      if (nextPosition > 1) {
+        bounded = Math.min(1 + OVERRUN_LIMIT, 1 + (nextPosition - 1) * OVERRUN_DAMPING);
+      } else if (nextPosition < -1) {
+        bounded = Math.max(-1 - OVERRUN_LIMIT, -1 + (nextPosition + 1) * OVERRUN_DAMPING);
+      }
+      position.value = bounded;
       return true;
     },
     [motionState, position],
   );
 
   const finishGesture = useCallback(
-    ({ startedRevision, target, success }: FinishGestureInput): MobilePanelCommit | null => {
+    ({
+      startedRevision,
+      target,
+      success,
+      velocityX = 0,
+    }: FinishGestureInput): MobilePanelCommit | null => {
       "worklet";
       const currentState = motionState.value;
       const transition = transitionMobilePanel(currentState, {
@@ -231,10 +260,10 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
         return null;
       }
       motionState.value = transition.state;
-      animateTransition(transition);
+      animateTransition(transition, velocityX / windowWidth);
       return transition.commit ?? null;
     },
-    [animateTransition, motionState],
+    [animateTransition, motionState, windowWidth],
   );
 
   const value = useMemo<MobilePanelsRuntime>(

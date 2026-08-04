@@ -10,6 +10,15 @@ import { useMobilePanelsRuntime } from "./provider";
 import { resolveMobilePanelGestureIntent } from "./gesture-intent";
 
 const MOBILE_WEB_EDGE_SWIPE_WIDTH = 32;
+// Commit a drag by where the panel LANDS, not where the finger stopped:
+// project translation with the release velocity and compare against a quarter
+// of the window, so short flicks still carry the drawer over.
+const PAN_END_VELOCITY_PROJECTION = 0.2;
+const PAN_SNAP_FRACTION = 0.25;
+function getProjectedPosition(translationX: number, velocityX: number): number {
+  "worklet";
+  return translationX + PAN_END_VELOCITY_PROJECTION * velocityX;
+}
 
 function isCurrentSelection(startedRevision: number): boolean {
   return usePanelStore.getState().mobilePanel.revision === startedRevision;
@@ -101,11 +110,14 @@ export function useOpenAgentListGesture(enabled: boolean) {
           updateGesture(startedRevision.value, -event.translationX / windowWidth);
         })
         .onEnd((event, success) => {
-          const shouldOpen = event.translationX > windowWidth / 3 || event.velocityX > 500;
+          const shouldOpen =
+            getProjectedPosition(event.translationX, event.velocityX) >
+            windowWidth * PAN_SNAP_FRACTION;
           const result = finishGesture({
             startedRevision: startedRevision.value,
             target: shouldOpen ? "agent-list" : "agent",
             success,
+            velocityX: event.velocityX,
           });
           if (result) {
             scheduleOnRN(commit, result.startedRevision);
@@ -195,11 +207,14 @@ export function useCloseAgentListGesture() {
           updateGesture(startedRevision.value, -1 - event.translationX / windowWidth);
         })
         .onEnd((event, success) => {
-          const shouldClose = event.translationX < -windowWidth / 3 || event.velocityX < -500;
+          const shouldClose =
+            getProjectedPosition(event.translationX, event.velocityX) <
+            -windowWidth * PAN_SNAP_FRACTION;
           const result = finishGesture({
             startedRevision: startedRevision.value,
             target: shouldClose ? "agent" : "agent-list",
             success,
+            velocityX: event.velocityX,
           });
           if (result) {
             scheduleOnRN(commit, result.startedRevision);
@@ -297,11 +312,14 @@ export function useOpenFileExplorerGesture({ enabled, onOpen }: OpenFileExplorer
           updateGesture(startedRevision.value, -event.translationX / windowWidth);
         })
         .onEnd((event, success) => {
-          const shouldOpen = event.translationX < -windowWidth / 3 || event.velocityX < -500;
+          const shouldOpen =
+            getProjectedPosition(event.translationX, event.velocityX) <
+            -windowWidth * PAN_SNAP_FRACTION;
           const result = finishGesture({
             startedRevision: startedRevision.value,
             target: shouldOpen ? "file-explorer" : "agent",
             success,
+            velocityX: event.velocityX,
           });
           if (result) {
             scheduleOnRN(commit, result.startedRevision);
@@ -391,11 +409,14 @@ export function useCloseFileExplorerGesture() {
           updateGesture(startedRevision.value, 1 - event.translationX / windowWidth);
         })
         .onEnd((event, success) => {
-          const shouldClose = event.translationX > windowWidth / 3 || event.velocityX > 500;
+          const shouldClose =
+            getProjectedPosition(event.translationX, event.velocityX) >
+            windowWidth * PAN_SNAP_FRACTION;
           const result = finishGesture({
             startedRevision: startedRevision.value,
             target: shouldClose ? "agent" : "file-explorer",
             success,
+            velocityX: event.velocityX,
           });
           if (result) {
             scheduleOnRN(commit, result.startedRevision);
