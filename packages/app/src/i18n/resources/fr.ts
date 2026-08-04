@@ -1108,6 +1108,10 @@ export const fr: TranslationResources = {
     minutesAgo: "il y a {{count}} min",
     hoursAgo: "il y a {{count}} h",
     daysAgo: "il y a {{count}} j",
+    daysAgo_one: "il y a {{count}} j",
+    daysAgo_two: "il y a {{count}} j",
+    daysAgo_few: "il y a {{count}} j",
+    daysAgo_other: "il y a {{count}} j",
   },
   newWorkspace: {
     title: "Nouvel espace de travail",

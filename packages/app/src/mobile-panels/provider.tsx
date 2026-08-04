@@ -46,6 +46,10 @@ const SPRING_MASS = 1;
 // settles back — a constrained rubber-band, not a wall.
 const OVERRUN_DAMPING = 0.35;
 const OVERRUN_LIMIT = 0.06;
+// Fed-in release velocity is capped in position units/s so a rage-fling bounces
+// slightly past the anchor instead of overshooting wildly.
+const MAX_SETTLE_VELOCITY = 6;
+
 const LEFT_PANEL_MASK = 1;
 const RIGHT_PANEL_MASK = 2;
 
@@ -260,7 +264,14 @@ export function MobilePanelsProvider({ children }: { children: ReactNode }) {
         return null;
       }
       motionState.value = transition.state;
-      animateTransition(transition, velocityX / windowWidth);
+      // Position always maps as -translationX/windowWidth (or its offset), so the
+      // spring's unit velocity is the NEGATED finger velocity; feeding +velocityX
+      // made flings counter-kick against the flick before settling.
+      const settleVelocity = Math.max(
+        -MAX_SETTLE_VELOCITY,
+        Math.min(MAX_SETTLE_VELOCITY, -velocityX / windowWidth),
+      );
+      animateTransition(transition, settleVelocity);
       return transition.commit ?? null;
     },
     [animateTransition, motionState, windowWidth],

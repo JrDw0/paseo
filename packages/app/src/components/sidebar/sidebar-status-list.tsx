@@ -8,6 +8,7 @@ import { type SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list"
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
 import type { HostBadgeModel } from "@/hosts/appearance";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { StyleSheet } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
 import { withUnistyles } from "react-native-unistyles";
@@ -690,7 +691,8 @@ function StatusWorkspaceRowInner({
   const trailing = useSidebarWorkspaceTrailing();
 
   const isDesktop = !isTouchPlatform;
-  const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
+  const scriptSummary = isDesktop ? selectWorkspaceScriptSummary(workspace.scripts) : null;
+  const isCompact = useIsCompactFormFactor();
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
 
@@ -715,6 +717,7 @@ function StatusWorkspaceRowInner({
         const workspaceRowStyle = getStatusWorkspaceRowStyle({
           selected,
           isHovered,
+          isCompact,
           inStatusGroup,
         });
         return (
@@ -863,15 +866,20 @@ function StatusWorkspaceActionSlot({
 function getStatusWorkspaceRowStyle({
   selected,
   isHovered,
+  isCompact,
   inStatusGroup,
 }: {
   selected: boolean;
   isHovered: boolean;
+  isCompact: boolean;
   inStatusGroup: boolean;
 }) {
   return [
     styles.workspaceRow,
     inStatusGroup && sidebarWorkspaceRowStyles.rowIndented,
+    // Touch drawers scale the whole row up to Material's two-line list density;
+    // the desktop sidebar keeps the established compact rhythm.
+    isCompact && styles.workspaceRowCompact,
     selected && styles.sidebarRowSelected,
     isHovered && styles.workspaceRowHovered,
   ];
@@ -961,13 +969,25 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     userSelect: "none",
   },
+  workspaceRowCompact: {
+    minHeight: 48,
+    paddingVertical: theme.spacing[3],
+    paddingLeft: theme.spacing[3],
+    paddingRight: theme.spacing[4],
+  },
   workspaceRowHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
   workspaceRowPressed: {
-    backgroundColor: theme.colors.surface2,
+    // Dark selection already sits on surface2, so the press must step one shade
+    // deeper there to stay visible on the selected row; light keeps surface2,
+    // which is already deeper than the light selected/hover shade.
+    backgroundColor: theme.colorScheme === "light" ? theme.colors.surface2 : theme.colors.surface3,
   },
   sidebarRowSelected: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    // Dark tints barely lift hover from the sidebar background, so selection
+    // steps up to surface2; light keeps the hover shade.
+    backgroundColor:
+      theme.colorScheme === "light" ? theme.colors.surfaceSidebarHover : theme.colors.surface2,
   },
 }));

@@ -168,10 +168,11 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   const workspaceBranchTextStyle = useMemo(
     () => [
       styles.workspaceBranchText,
+      isCompact && styles.workspaceBranchTextCompact,
       fullOpacityTitle && styles.workspaceBranchTextHovered,
       isCreating && styles.workspaceBranchTextCreating,
     ],
-    [fullOpacityTitle, isCreating],
+    [isCompact, fullOpacityTitle, isCreating],
   );
 
   return (
@@ -193,12 +194,13 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             workspaceKind={workspace.workspaceKind}
             loading={isLoading}
             reserveIdleSpace={reserveIdleStatusIndicatorSpace}
+            compact={isCompact}
           />
         )}
         <View style={styles.workspaceContentColumn}>
           <View style={styles.workspaceTitleRow}>
             <View style={styles.workspaceTitleLeft}>
-              <WorkspaceProviderIcon meta={agentMeta} />
+              <WorkspaceProviderIcon meta={agentMeta} compact={isCompact} />
               <Text style={workspaceBranchTextStyle} numberOfLines={1}>
                 {workspaceLabel}
               </Text>
@@ -225,12 +227,18 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   );
 });
 
-function WorkspaceProviderIcon({ meta }: { meta: ReturnType<typeof useSidebarRowAgentMeta> }) {
+function WorkspaceProviderIcon({
+  meta,
+  compact = false,
+}: {
+  meta: ReturnType<typeof useSidebarRowAgentMeta>;
+  compact?: boolean;
+}) {
   if (!meta?.provider) {
     return null;
   }
   const Icon = getProviderIcon(meta.provider);
-  return <Icon size={12} color={styles.workspaceProviderIcon.color} />;
+  return <Icon size={compact ? 16 : 12} color={styles.workspaceProviderIcon.color} />;
 }
 
 function WorkspaceAgentActivity({ meta }: { meta: ReturnType<typeof useSidebarRowAgentMeta> }) {
@@ -262,16 +270,30 @@ function WorkspaceWorktreeBranchBadge({ workspace }: { workspace: SidebarWorkspa
   );
 }
 
+function resolveStatusDotGeometry(bucket: SidebarWorkspaceEntry["statusBucket"], compact: boolean) {
+  const emphasized = isEmphasizedStatusDotBucket(bucket);
+  let size = compact ? 8 : DEFAULT_STATUS_DOT_SIZE;
+  let offset = DEFAULT_STATUS_DOT_OFFSET;
+  if (emphasized) {
+    size = compact ? 10 : EMPHASIZED_STATUS_DOT_SIZE;
+    offset = compact ? -2 : EMPHASIZED_STATUS_DOT_OFFSET;
+  }
+  return { size, offset };
+}
+
 function WorkspaceStatusIndicator({
   bucket,
   workspaceKind,
   loading = false,
   reserveIdleSpace = true,
+  compact = false,
 }: {
   bucket: SidebarWorkspaceEntry["statusBucket"];
   workspaceKind: SidebarWorkspaceEntry["workspaceKind"];
   loading?: boolean;
   reserveIdleSpace?: boolean;
+  /** Touch drawers scale the dot/icon up one notch for legibility at arm's length. */
+  compact?: boolean;
 }) {
   // Busy is a dot here for the same reason it is on a project icon: every status in the
   // sidebar is a dot, and a row with a project icon simply moves that dot onto the icon.
@@ -296,7 +318,7 @@ function WorkspaceStatusIndicator({
   if (bucket === "needs_input") {
     return (
       <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-needs_input">
-        <ThemedCircleAlert size={14} uniProps={needsInputColorMapping} />
+        <ThemedCircleAlert size={compact ? 16 : 14} uniProps={amberColorMapping} />
       </View>
     );
   }
@@ -304,7 +326,7 @@ function WorkspaceStatusIndicator({
   if (bucket === "attention") {
     return (
       <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-attention">
-        <View style={styles.standaloneStatusDot} />
+        <View style={[styles.standaloneStatusDot, compact && styles.standaloneStatusDotCompact]} />
       </View>
     );
   }
@@ -327,16 +349,13 @@ function WorkspaceStatusIndicator({
   else KindIcon = ThemedFolder;
 
   const dotColorStyle = getStatusDotColorStyle(bucket);
-  const statusDotSize = isEmphasizedStatusDotBucket(bucket)
-    ? EMPHASIZED_STATUS_DOT_SIZE
-    : DEFAULT_STATUS_DOT_SIZE;
-  const statusDotOffset =
-    statusDotSize === EMPHASIZED_STATUS_DOT_SIZE
-      ? EMPHASIZED_STATUS_DOT_OFFSET
-      : DEFAULT_STATUS_DOT_OFFSET;
+  const { size: statusDotSize, offset: statusDotOffset } = resolveStatusDotGeometry(
+    bucket,
+    compact,
+  );
   return (
     <View style={styles.workspaceStatusDot} testID={`workspace-status-indicator-${bucket}`}>
-      <KindIcon size={14} uniProps={foregroundMutedColorMapping} />
+      <KindIcon size={compact ? 16 : 14} uniProps={foregroundMutedColorMapping} />
       {dotColorStyle ? (
         <StatusDotOverlay
           dotColorStyle={dotColorStyle}
@@ -681,6 +700,10 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.foregroundExtraMuted,
     opacity: 0.3,
   },
+  standaloneStatusDotCompact: {
+    width: 10,
+    height: 10,
+  },
   // The title owns the first line outright now that the host, change request and CI moved
   // to the meta row, so it takes the full width the trailing slot leaves behind.
   workspaceBranchText: {
@@ -691,6 +714,11 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0.76,
     flex: 1,
     minWidth: 0,
+  },
+  // Touch drawers bump the title to body size so the scan target reads at arm's length.
+  workspaceBranchTextCompact: {
+    fontSize: theme.fontSize.base,
+    lineHeight: 22,
   },
   workspaceBranchTextCreating: {
     opacity: 0.92,

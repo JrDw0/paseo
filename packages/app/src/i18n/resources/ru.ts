@@ -1100,6 +1100,10 @@ export const ru: TranslationResources = {
     minutesAgo: "{{count}} мин назад",
     hoursAgo: "{{count}} ч назад",
     daysAgo: "{{count}} дн назад",
+    daysAgo_one: "{{count}} дн назад",
+    daysAgo_two: "{{count}} дн назад",
+    daysAgo_few: "{{count}} дн назад",
+    daysAgo_other: "{{count}} дн назад",
   },
   newWorkspace: {
     title: "Новое рабочее пространство",

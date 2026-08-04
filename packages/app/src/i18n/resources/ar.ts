@@ -1078,6 +1078,10 @@ export const ar: TranslationResources = {
     minutesAgo: "منذ {{count}} د",
     hoursAgo: "منذ {{count}} س",
     daysAgo: "منذ {{count}} يوم",
+    daysAgo_one: "منذ يوم",
+    daysAgo_two: "منذ يومين",
+    daysAgo_few: "منذ {{count}} أيام",
+    daysAgo_other: "منذ {{count}} يوم",
   },
   newWorkspace: {
     title: "مساحة عمل جديدة",

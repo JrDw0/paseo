@@ -1067,6 +1067,10 @@ export const zhCN: TranslationResources = {
     minutesAgo: "{{count}} 分钟前",
     hoursAgo: "{{count}} 小时前",
     daysAgo: "{{count}} 天前",
+    daysAgo_one: "{{count}} 天前",
+    daysAgo_two: "{{count}} 天前",
+    daysAgo_few: "{{count}} 天前",
+    daysAgo_other: "{{count}} 天前",
   },
   newWorkspace: {
     title: "新建工作区",

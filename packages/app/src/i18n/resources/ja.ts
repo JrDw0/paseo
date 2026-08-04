@@ -1089,6 +1089,10 @@ export const ja: TranslationResources = {
     minutesAgo: "{{count}} 分前",
     hoursAgo: "{{count}} 時間前",
     daysAgo: "{{count}} 日前",
+    daysAgo_one: "{{count}} 日前",
+    daysAgo_two: "{{count}} 日前",
+    daysAgo_few: "{{count}} 日前",
+    daysAgo_other: "{{count}} 日前",
   },
   newWorkspace: {
     title: "新しいワークスペース",

@@ -392,13 +392,16 @@ function getProjectWorkspaceRowStyle({
   isDragging,
   selected,
   isHovered,
+  compact,
 }: {
   isDragging: boolean;
   selected: boolean;
   isHovered: boolean;
+  compact: boolean;
 }) {
   return [
     styles.workspaceRow,
+    compact && styles.workspaceRowCompact,
     isDragging && styles.workspaceRowDragging,
     selected && styles.sidebarRowSelected,
     isHovered && styles.workspaceRowHovered,
@@ -935,12 +938,13 @@ function ProjectHeaderRow({
   const projectRowStyle = useCallback(
     ({ pressed }: PressableStateCallbackType) => [
       styles.projectRow,
+      isMobileBreakpoint && styles.projectRowCompact,
       isDragging && styles.projectRowDragging,
       selected && styles.sidebarRowSelected,
       isHovered && styles.projectRowHovered,
       pressed && styles.projectRowPressed,
     ],
-    [isDragging, selected, isHovered],
+    [isDragging, isMobileBreakpoint, selected, isHovered],
   );
 
   const rowChildren = (
@@ -1077,7 +1081,7 @@ function WorkspaceRowInner({
   onTogglePin,
   reserveIdleStatusIndicatorSpace = true,
 }: WorkspaceRowInnerProps) {
-  const _isCompact = useIsCompactFormFactor();
+  const isCompact = useIsCompactFormFactor();
   const isTouchPlatform = platformIsNative;
   const interaction = useLongPressDragInteraction({
     drag,
@@ -1109,6 +1113,7 @@ function WorkspaceRowInner({
           isDragging,
           selected,
           isHovered,
+          compact: isCompact,
         });
         return (
           <View
@@ -2612,6 +2617,13 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     userSelect: "none",
   },
+  // Touch drawers step project rows up to the Material drawer item size.
+  projectRowCompact: {
+    minHeight: 48,
+    paddingVertical: theme.spacing[3],
+    paddingLeft: theme.spacing[3],
+    paddingRight: theme.spacing[4],
+  },
   projectRowHovered: {
     backgroundColor: theme.colors.surfaceSidebarHover,
   },
@@ -2735,6 +2747,12 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     userSelect: "none",
   },
+  workspaceRowCompact: {
+    minHeight: 48,
+    paddingVertical: theme.spacing[3],
+    paddingLeft: theme.spacing[3],
+    paddingRight: theme.spacing[4],
+  },
   workspaceRowMain: {
     flexDirection: "row",
     alignItems: "center",
@@ -2770,7 +2788,10 @@ const styles = StyleSheet.create((theme) => ({
     ...theme.shadow.md,
   },
   sidebarRowSelected: {
-    backgroundColor: theme.colors.surfaceSidebarHover,
+    // Dark tints barely lift hover from the sidebar background, so selection
+    // steps up to surface2; light keeps the hover shade.
+    backgroundColor:
+      theme.colorScheme === "light" ? theme.colors.surfaceSidebarHover : theme.colors.surface2,
   },
   workspaceRowContainer: {
     position: "relative",

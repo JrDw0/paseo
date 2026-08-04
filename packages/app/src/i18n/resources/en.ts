@@ -1088,6 +1088,10 @@ export const en = {
     minutesAgo: "{{count}}m ago",
     hoursAgo: "{{count}}h ago",
     daysAgo: "{{count}}d ago",
+    daysAgo_one: "{{count}}d ago",
+    daysAgo_two: "{{count}}d ago",
+    daysAgo_few: "{{count}}d ago",
+    daysAgo_other: "{{count}}d ago",
   },
   newWorkspace: {
     title: "New workspace",

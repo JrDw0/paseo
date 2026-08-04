@@ -799,14 +799,14 @@ function MobileSidebar({
             icon={Settings}
             label={labels.settings}
             onPress={handleSettingsPress}
-            size={40}
+            size={44}
             testID="sidebar-mobile-settings"
           />
           <MobileNavIconButton
             icon={Home}
             label={labels.home}
             onPress={handleHomePress}
-            size={40}
+            size={44}
             testID="sidebar-mobile-home"
           />
           <View style={styles.mobileTopNavSpacer} />
@@ -815,7 +815,7 @@ function MobileSidebar({
             label={labels.filterWorkspaces}
             onPress={handleToggleFilterInput}
             active={showFilterInput}
-            size={40}
+            size={44}
             testID="sidebar-mobile-filter-toggle"
           />
         </View>
@@ -832,7 +832,7 @@ function MobileSidebar({
                 icon={X}
                 label={labels.closeFilter}
                 onPress={handleCloseFilterInput}
-                size={40}
+                size={44}
                 testID="sidebar-mobile-filter-close"
               />
             </View>
@@ -920,10 +920,12 @@ function MobileNavIconButton({
     ],
     [accent, disabled, size],
   );
-  const iconSize = size >= 48 ? theme.iconSize.lg : theme.iconSize.md;
+  const iconSize = size >= 44 ? theme.iconSize.lg : theme.iconSize.md;
   // On-state is a colored icon, not a filled circle: only the accent CTA (FAB)
   // may own a filled accent surface. See docs/design.md §6 "one accent CTA per surface".
-  let iconColor = active ? theme.colors.accent : theme.colors.foregroundMuted;
+  // accent (deep green) reads as muted against the dark row background, so the
+  // active chrome icon uses the bright mint tint that also carries text accents.
+  let iconColor = active ? theme.colors.accentBright : theme.colors.foregroundMuted;
   if (accent) {
     iconColor = theme.colors.accentForeground;
   }
@@ -1244,8 +1246,9 @@ function WorkspacesSectionHeader() {
   );
 }
 
-// Demoted-chrome nav button for the compact workspaces header: small, muted,
-// accent icon when its destination is the active route.
+// Demoted-chrome nav button for the compact workspaces header: muted, bright
+// accent icon when its destination is the active route. Still a 32px target —
+// the header is dense but these stay reachable by thumb.
 function SectionHeaderNavButton({
   icon: Icon,
   label,
@@ -1271,7 +1274,7 @@ function SectionHeaderNavButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      hitSlop={8}
+      hitSlop={10}
       onPress={onPress}
       style={buttonStyle}
       testID={testID}
@@ -1279,11 +1282,11 @@ function SectionHeaderNavButton({
       {({ hovered, pressed }) => {
         let color = theme.colors.foregroundMuted;
         if (active) {
-          color = theme.colors.accent;
+          color = theme.colors.accentBright;
         } else if (hovered || pressed) {
           color = theme.colors.foreground;
         }
-        return <Icon size={14} color={color} />;
+        return <Icon size={15} color={color} />;
       }}
     </Pressable>
   );
@@ -1364,8 +1367,8 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
   },
   workspacesHeaderIconButton: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.md,

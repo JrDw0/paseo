@@ -1100,6 +1100,10 @@ export const ptBR: TranslationResources = {
     minutesAgo: "há {{count}} min",
     hoursAgo: "há {{count}} h",
     daysAgo: "há {{count}} d",
+    daysAgo_one: "há {{count}} d",
+    daysAgo_two: "há {{count}} d",
+    daysAgo_few: "há {{count}} d",
+    daysAgo_other: "há {{count}} d",
   },
   newWorkspace: {
     title: "Novo workspace",
