@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, type ReactElement, type RefObject } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type ReactElement,
+  type RefObject,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -108,7 +116,10 @@ function treeRowKeyExtractor(row: ExplorerTreeRow) {
   return row.entry.path;
 }
 
-function TreeRowItem({
+// Selection changes recreate renderTreeRow (selectedEntryPath dep); memo keeps every
+// row except the old/new selection from re-rendering. Entry objects come straight
+// from the explorer store and keep identity while their directory data is unchanged.
+const TreeRowItem = memo(function TreeRowItem({
   serverId,
   workspaceId,
   entry,
@@ -216,7 +227,7 @@ function TreeRowItem({
       />
     </ContextMenu>
   );
-}
+});
 
 interface FileExplorerPaneProps {
   serverId: string;

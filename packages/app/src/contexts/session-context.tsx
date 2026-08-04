@@ -598,13 +598,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       });
 
       if (result.error) {
-        handleTimelineError({
-          result,
-          agentId,
-          initKey,
-          serverId,
-          setInitializingAgents,
-        });
+        handleTimelineError({ result, agentId, initKey, serverId, setInitializingAgents });
         return;
       }
 

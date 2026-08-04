@@ -9,7 +9,7 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCallback, useMemo, useState, type ReactElement } from "react";
+import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
@@ -201,7 +201,10 @@ function SessionRowTrailingAttention({
   );
 }
 
-function SessionRow({
+// Memoized so an unchanged row (AggregatedAgent identity is preserved by
+// use-aggregated-agents when fields are unchanged) skips re-render when a
+// sibling's activity/status updates.
+const SessionRow = memo(function SessionRow({
   agent,
   isMobile,
   selectedAgentId,
@@ -354,7 +357,7 @@ function SessionRow({
       />
     </Pressable>
   );
-}
+});
 
 export function AgentList({
   agents,

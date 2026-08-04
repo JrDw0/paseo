@@ -25,7 +25,9 @@ export function useMessageJumpIndex({
   enabled: boolean;
 }) {
   const { t } = useTranslation();
-  const session = useSessionStore((state) => state.sessions[serverId]);
+  // The session object is recreated on every stream flush; only the client reference
+  // matters here and stays stable, so select it directly to avoid per-flush re-renders.
+  const sessionClient = useSessionStore((state) => state.sessions[serverId]?.client);
   const [entries, setEntries] = useState<JumpIndexEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
@@ -90,7 +92,7 @@ export function useMessageJumpIndex({
   // Seed from cache instantly, then refresh in the background on mount/enable.
   useEffect(() => {
     mounted.current = true;
-    if (!session?.client || !enabled) {
+    if (!sessionClient || !enabled) {
       return;
     }
     let cancelled = false;
@@ -114,7 +116,7 @@ export function useMessageJumpIndex({
       mounted.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.client, enabled, agentId, serverId, agentKey]);
+  }, [sessionClient, enabled, agentId, serverId, agentKey]);
 
   return useMemo(
     () => ({ entries, error, refresh, ready: entries !== null || error !== null }),

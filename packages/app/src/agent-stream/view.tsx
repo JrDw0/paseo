@@ -833,38 +833,83 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       agentId,
       enabled: isMessageJumpSheetOpen || (!isWeb && isActive),
     });
-    const messageJumpEntries = useMemo<MessageJumpEntry[]>(() => {
-      const combined = [...projectedToolCalls.tail, ...(projectedToolCalls.head ?? [])];
-      const hasImages = loweredImageFlags(combined);
-      if (indexEntries) {
-        const seenIndex = new Set<string>();
-        const entries: MessageJumpEntry[] = [];
-        for (const entry of indexEntries) {
-          if (seenIndex.has(entry.id)) {
-            continue;
-          }
-          seenIndex.add(entry.id);
-          entries.push({
-            id: entry.id,
-            epoch: entry.epoch,
-            seq: entry.seq,
-            preview: entry.preview,
-            timestampLabel: entry.timestampLabel,
-            hasImages: hasImages.get(entry.id) ?? false,
-          });
-        }
-        return entries;
+    // The tail is the whole history and the head re-references every 48ms stream
+    // flush, so the O(tail) scans stay in tail-keyed memos and each flush only
+    // re-walks the (small) head. Head items come after tail items, and tail ids
+    // win on collision — the same order/precedence as scanning tail+head combined.
+    const tailImageFlags = useMemo(
+      () => loweredImageFlags(projectedToolCalls.tail),
+      [projectedToolCalls.tail],
+    );
+    const indexMappedEntries = useMemo<MessageJumpEntry[] | null>(() => {
+      if (!indexEntries) {
+        return null;
       }
-      // No index yet: fall back to the loaded tail with the same projection shape.
-      return buildLoadedFallbackJumpEntries(
-        combined,
-        {
-          imageMessage: t("agentStream.messageJump.imageMessage"),
-          attachmentMessage: t("agentStream.messageJump.attachmentMessage"),
-        },
-        formatTimeAgo,
-      );
-    }, [indexEntries, projectedToolCalls.head, projectedToolCalls.tail, t]);
+      const seenIndex = new Set<string>();
+      const entries: MessageJumpEntry[] = [];
+      for (const entry of indexEntries) {
+        if (seenIndex.has(entry.id)) {
+          continue;
+        }
+        seenIndex.add(entry.id);
+        entries.push({
+          id: entry.id,
+          epoch: entry.epoch,
+          seq: entry.seq,
+          preview: entry.preview,
+          timestampLabel: entry.timestampLabel,
+          hasImages: tailImageFlags.get(entry.id) ?? false,
+        });
+      }
+      return entries;
+    }, [indexEntries, tailImageFlags]);
+    const messageJumpLabels = useMemo<LoadedMessageLabel>(
+      () => ({
+        imageMessage: t("agentStream.messageJump.imageMessage"),
+        attachmentMessage: t("agentStream.messageJump.attachmentMessage"),
+      }),
+      [t],
+    );
+    const tailFallbackEntries = useMemo(
+      () =>
+        buildLoadedFallbackJumpEntries(projectedToolCalls.tail, messageJumpLabels, formatTimeAgo),
+      [projectedToolCalls.tail, messageJumpLabels],
+    );
+    const messageJumpEntries = useMemo<MessageJumpEntry[]>(() => {
+      const head = projectedToolCalls.head ?? EMPTY_STREAM_HEAD;
+      const headFlags = loweredImageFlags(head);
+      if (indexMappedEntries) {
+        let patched = indexMappedEntries;
+        for (let index = 0; index < indexMappedEntries.length; index++) {
+          const entry = indexMappedEntries[index];
+          // Tail ids win on a tail/head id collision (head flags only fill gaps).
+          const headFlag = tailImageFlags.has(entry.id) ? undefined : headFlags.get(entry.id);
+          if (headFlag !== undefined && headFlag !== entry.hasImages) {
+            if (patched === indexMappedEntries) {
+              patched = indexMappedEntries.slice();
+            }
+            patched[index] = { ...entry, hasImages: headFlag };
+          }
+        }
+        return patched;
+      }
+      if (headFlags.size === 0) {
+        return tailFallbackEntries;
+      }
+      const tailIds = new Set(tailFallbackEntries.map((entry) => entry.id));
+      return [
+        ...tailFallbackEntries,
+        ...buildLoadedFallbackJumpEntries(head, messageJumpLabels, formatTimeAgo).filter(
+          (entry) => !tailIds.has(entry.id),
+        ),
+      ];
+    }, [
+      indexMappedEntries,
+      tailFallbackEntries,
+      tailImageFlags,
+      projectedToolCalls.head,
+      messageJumpLabels,
+    ]);
 
     const renderedStreamItems = useMemo(
       () => [

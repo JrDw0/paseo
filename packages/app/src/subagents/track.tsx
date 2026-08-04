@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactElement } from "react";
+import { memo, useCallback, useMemo, useState, type ReactElement } from "react";
 import { Pressable, ScrollView, Text, View, type PressableStateCallbackType } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Archive, ChevronDown, ChevronRight, Unlink } from "lucide-react-native";
@@ -156,7 +156,9 @@ interface SubagentsTrackRowProps {
   onDetachSubagent?: (id: string) => void;
 }
 
-function SubagentsTrackRow({
+// Row identity is preserved across store updates by useSubagentsForParent, so an
+// unchanged row bails out when a sibling subagent's status flips during streaming.
+const SubagentsTrackRow = memo(function SubagentsTrackRow({
   row,
   onOpenSubagent,
   onOpenProviderSubagent,
@@ -223,7 +225,7 @@ function SubagentsTrackRow({
       </Pressable>
     </View>
   );
-}
+});
 
 function SubagentRowActions({
   rowId,
