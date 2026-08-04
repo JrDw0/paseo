@@ -56,6 +56,12 @@ function stripTerminalFenceNewline(code: string): string {
 // Longer than the 48ms stream flush cadence, short enough to feel instant once
 // output pauses.
 const HIGHLIGHT_SETTLE_DELAY_MS = 250;
+// A stream that appends continuously without ever pausing long enough for the
+// settle timer (250ms) to fire would render plain text for the whole stream.
+// Once un-settled growth has run this long, force fresh highlighting for one
+// beat so the output isn't stuck un-highlighted; the normal debounce resumes
+// on the next pause.
+const HIGHLIGHT_FORCE_INTERVAL_MS = 1000;
 
 export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   code,
@@ -98,7 +104,22 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   // placeholder resolving into real content, a shorter re-generated block) is
   // already complete — highlight it now instead of flashing plain for 250ms.
   const isAppendGrowth = renderedCode.startsWith(previousRenderedRef.current);
-  const highlightPending = settledCode !== renderedCode && isAppendGrowth;
+
+  // Track the wall-clock time the last highlight completed. Sustained append
+  // growth keeps the settle timer from ever firing, so without this the block
+  // stays plain until the stream pauses. When the reject is due to un-settled
+  // growth older than HIGHLIGHT_FORCE_INTERVAL_MS, drop the reject for one beat
+  // so a fresh highlight (and therefore a refreshed lastHighlightAt) runs.
+  const lastHighlightAtRef = useRef<number>(0);
+  const forceHighlightForSustainedStream =
+    isAppendGrowth &&
+    settledCode !== renderedCode &&
+    Date.now() - lastHighlightAtRef.current > HIGHLIGHT_FORCE_INTERVAL_MS;
+
+  // Wholesale replacement that is also a strict prefix-extension is misclassified
+  // as append, deferring highlight 250ms. Rare; acceptable; see review 2026-08-05.
+  const highlightPending =
+    settledCode !== renderedCode && isAppendGrowth && !forceHighlightForSustainedStream;
 
   const keyedLines = useMemo<KeyedLine[] | null>(() => {
     if (highlightPending) {
@@ -106,6 +127,12 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
     }
     return highlightToKeyedLines(renderedCode, fenceLanguageToExtension(language));
   }, [renderedCode, language, highlightPending]);
+  // Refresh lastHighlightAt whenever a real highlight lands, so a sustained
+  // stream gets a re-highlight about once per HIGHLIGHT_FORCE_INTERVAL_MS
+  // instead of staying plain until the stream finally pauses.
+  useEffect(() => {
+    if (keyedLines) lastHighlightAtRef.current = Date.now();
+  }, [keyedLines]);
 
   const isCompact = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);

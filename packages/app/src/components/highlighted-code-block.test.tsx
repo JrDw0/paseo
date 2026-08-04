@@ -194,4 +194,48 @@ describe("HighlightedCodeBlock streaming settle debounce", () => {
     renderBlock(root, "line1\n");
     expect(highlightToKeyedLinesMock).toHaveBeenCalledWith("line1", "ts");
   });
+
+  const FORCE_MS = 1000;
+
+  it("keeps highlighting pending while a stream has grown for under a second", () => {
+    renderBlock(root, "const x = 1;");
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(1);
+
+    // Append faster than the settle cadence (so the 250ms timer never fires)
+    // while keeping the total un-highlighted stretch under FORCE_MS, so neither
+    // settle nor forced highlighting runs.
+    renderBlock(root, "const x = 1;\nconst y = 2;");
+    act(() => vi.advanceTimersByTime(100));
+    renderBlock(root, "const x = 1;\nconst y = 2;\nconst z = 3;");
+    act(() => vi.advanceTimersByTime(100));
+    renderBlock(root, "const x = 1;\nconst y = 2;\nconst z = 3;\nconst w = 4;");
+    act(() => vi.advanceTimersByTime(100));
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("forces fresh highlighting once a stream has grown for more than a second", () => {
+    renderBlock(root, "const x = 1;");
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(1);
+
+    // The stream never settles long enough for the 250ms debounce, but once it
+    // has run un-highlighted past FORCE_MS, one highlight must land anyway.
+    act(() => vi.advanceTimersByTime(FORCE_MS + 100));
+    renderBlock(root, "const x = 1;\nconst y = 2;");
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(2);
+    expect(highlightToKeyedLinesMock).toHaveBeenLastCalledWith("const x = 1;\nconst y = 2;", "ts");
+  });
+
+  it("returns to normal settle behavior once the stream stops", () => {
+    renderBlock(root, "const x = 1;");
+    renderBlock(root, "const x = 1;\nconst y = 2;");
+    renderBlock(root, "const x = 1;\nconst y = 2;\nconst z = 3;");
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(1);
+
+    act(() => vi.advanceTimersByTime(SETTLE_MS));
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(2);
+    expect(highlightToKeyedLinesMock).toHaveBeenLastCalledWith(
+      "const x = 1;\nconst y = 2;\nconst z = 3;",
+      "ts",
+    );
+  });
 });

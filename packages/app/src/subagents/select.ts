@@ -159,8 +159,12 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
     const prevRows = prevRowsRef.current;
     const nextRows: SubagentRow[] = [];
     const nextCache = new Map<string, SubagentRow>();
+    // Scope the cache key by parent so two parents that happen to produce
+    // deep-equal rows never share a cached entry (which would otherwise keep a
+    // stale row around when useSubagentsForParent re-runs for a different parent).
+    const parentScope = params.parentAgentId;
     for (const row of rows) {
-      const key = `${row.kind}:${row.id}`;
+      const key = `${parentScope}\0${row.kind}:${row.id}`;
       const prev = prevRows.get(key);
       const stable = prev !== undefined && equal(prev, row) ? prev : row;
       nextRows.push(stable);
@@ -168,5 +172,5 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
     }
     prevRowsRef.current = nextCache;
     return nextRows;
-  }, [paseoRows, providerRows]);
+  }, [params.parentAgentId, paseoRows, providerRows]);
 }

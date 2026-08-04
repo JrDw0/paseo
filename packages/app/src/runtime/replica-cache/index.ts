@@ -379,9 +379,18 @@ export class ReplicaCache {
         const session = state.sessions[serverId];
         if (!session) continue;
         if (session.focusedAgentId) this.lastFocusedAgentIds.set(serverId, session.focusedAgentId);
-        const refs = this.captureWatchedRefs(serverId, session);
         const previous = this.watchedRefs.get(serverId);
-        if (previous && watchedSessionRefsEqual(previous, refs)) continue;
+        // Focus-boundary guard: dropping focus to null then re-acquiring it keeps
+        // the *effective* id stable via the lastFocused fallback, which the refs
+        // diff below would treat as unchanged. Reset the baseline whenever the raw
+        // focus id changes so the fresh view is captured and persisted, not skipped.
+        if (previous && previous.focusedAgentId !== session.focusedAgentId) {
+          this.watchedRefs.delete(serverId);
+          changed = true;
+        }
+        const refs = this.captureWatchedRefs(serverId, session);
+        const latest = this.watchedRefs.get(serverId);
+        if (latest && watchedSessionRefsEqual(latest, refs)) continue;
         this.watchedRefs.set(serverId, refs);
         changed = true;
       }
@@ -432,8 +441,14 @@ export class ReplicaCache {
   }
 
   private captureWatchedRefs(serverId: string, session: SessionState): WatchedSessionRefs {
-    const focusedAgentId = session.focusedAgentId ?? this.lastFocusedAgentIds.get(serverId) ?? null;
-    const agent = focusedAgentId ? session.agents.get(focusedAgentId) : undefined;
+    // Resolve agent data from the *effective* focus (current raw focus, falling
+    // back to the last-focused agent so background activity keeps persisting).
+    // But record the raw `session.focusedAgentId` as the baseline identity so
+    // the subscribe loop can detect focus transitions that the effective-value
+    // fallback (lastFocusedAgentIds) would otherwise mask.
+    const effectiveFocusId =
+      session.focusedAgentId ?? this.lastFocusedAgentIds.get(serverId) ?? null;
+    const agent = effectiveFocusId ? session.agents.get(effectiveFocusId) : undefined;
     const workspace = agent
       ? ((agent.workspaceId ? session.workspaces.get(agent.workspaceId) : undefined) ??
         Array.from(session.workspaces.values()).find(
@@ -441,10 +456,18 @@ export class ReplicaCache {
         ))
       : undefined;
     const project = workspace ? session.projects.get(workspace.projectId) : undefined;
-    const tail = focusedAgentId ? session.agentStreamTail.get(focusedAgentId) : undefined;
+    const tail = effectiveFocusId ? session.agentStreamTail.get(effectiveFocusId) : undefined;
     const cursor = agent ? (session.agentTimelineCursor.get(agent.id) ?? null) : null;
     const hasOlder = agent ? (session.agentTimelineHasOlder.get(agent.id) ?? false) : false;
-    return { focusedAgentId, agent, workspace, project, tail, cursor, hasOlder };
+    return {
+      focusedAgentId: session.focusedAgentId,
+      agent,
+      workspace,
+      project,
+      tail,
+      cursor,
+      hasOlder,
+    };
   }
 
   private captureSessions(): void {

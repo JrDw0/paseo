@@ -428,6 +428,9 @@ export interface FileReadResult {
   kind: LegacyFileExplorerFilePayload["kind"];
   modifiedAt: string;
   revision?: string;
+  // How text `bytes` should be decoded. "utf-8" (default) or "latin1" for
+  // non-UTF-8 text previews; absent/undefined for binary or legacy JSON reads.
+  encoding?: "utf-8" | "latin1" | "binary";
   // True when a maxBytes preview cap cut the content; size still reports the
   // full on-disk file size.
   truncated?: boolean;
@@ -1085,8 +1088,23 @@ function binaryFileKind(mime: string, encoding: string): FileReadResult["kind"] 
   if (mime.startsWith("image/")) {
     return "image";
   }
-  if (encoding === "utf-8" || mime.startsWith("text/") || mime === "application/json") {
+  if (
+    encoding === "utf-8" ||
+    encoding === "latin1" ||
+    mime.startsWith("text/") ||
+    mime === "application/json"
+  ) {
     return "text";
+  }
+  return "binary";
+}
+
+function binaryEncoding(encoding: string, mime: string): FileReadResult["encoding"] {
+  if (encoding === "latin1") {
+    return "latin1";
+  }
+  if (encoding === "utf-8" || mime.startsWith("text/") || mime === "application/json") {
+    return "utf-8";
   }
   return "binary";
 }
@@ -5849,6 +5867,7 @@ export class DaemonClient {
       size: transfer.size,
       path: transfer.path,
       kind: binaryFileKind(transfer.mime, transfer.encoding),
+      encoding: binaryEncoding(transfer.encoding, transfer.mime),
       modifiedAt: transfer.modifiedAt,
       revision: transfer.revision,
       truncated: transfer.truncated,

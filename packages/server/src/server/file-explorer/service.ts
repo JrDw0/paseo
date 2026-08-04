@@ -6,7 +6,10 @@ import { expandUserPath, resolvePathFromBase } from "../path-utils.js";
 
 export type ExplorerEntryKind = "file" | "directory";
 export type ExplorerFileKind = "text" | "image" | "binary";
+// Legacy JSON file payload encoding (must stay within the protocol enum).
 export type ExplorerEncoding = "utf-8" | "base64" | "none";
+// How binary-frame text bytes should be decoded by the client.
+export type ExplorerTextEncoding = "utf-8" | "latin1";
 
 export interface ListDirectoryParams {
   root: string;
@@ -73,7 +76,7 @@ export interface FileExplorerFile {
 export interface FileExplorerFileBytes {
   path: string;
   kind: ExplorerFileKind;
-  encoding: "utf-8" | "binary";
+  encoding: "utf-8" | "latin1" | "binary";
   bytes: Uint8Array;
   mimeType: string;
   size: number;
@@ -85,7 +88,7 @@ export interface FileExplorerFileBytes {
 export interface FileExplorerFileStream {
   path: string;
   kind: ExplorerFileKind;
-  encoding: "utf-8" | "binary";
+  encoding: "utf-8" | "latin1" | "binary";
   mimeType: string;
   size: number;
   modifiedAt: string;
@@ -233,11 +236,17 @@ export async function readExplorerFile({
     };
   }
 
+  // Decode latin1 text to its code points so the client's utf-8 re-encode round-trips
+  // the right characters (latin1 bytes → Unicode string → UTF-8 bytes). Marking the
+  // legacy payload utf-8 keeps the JSON protocol enum unchanged and old clients valid.
   return {
     path: file.path,
     kind: file.kind,
     encoding: "utf-8",
-    content: Buffer.from(file.bytes).toString("utf-8"),
+    content:
+      file.encoding === "latin1"
+        ? Buffer.from(file.bytes).toString("latin1")
+        : Buffer.from(file.bytes).toString("utf-8"),
     mimeType: file.mimeType,
     size: file.size,
     modifiedAt: file.modifiedAt,
@@ -275,11 +284,17 @@ export async function readExplorerFileBytes({
     // multi-hundred-MB log, which freezes every client waiting on it — so the
     // prefix alone decides the kind. (Images are excluded: a truncated image
     // cannot render, so they keep the full-read path below.)
+    //
+    // Classification for a truncated prefix: first sniff the leading sample for
+    // a hard binary signal (null byte or control-byte spam). If the sniff says
+    // text, treat it as text regardless of UTF-8 validity — otherwise a
+    // non-UTF-8 log (latin1/windows-1252 with high bytes) would be misclassified
+    // as binary just because its prefix isn't valid UTF-8.
     if (!isImage && maxBytes !== undefined && stats.size > maxBytes) {
       const buffer = Buffer.allocUnsafe(maxBytes);
       const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
-      const prefix = buffer.subarray(0, bytesRead);
-      if (prefix.includes(0) || !isValidUtf8Prefix(prefix)) {
+      const rawPrefix = buffer.subarray(0, bytesRead);
+      if (sniffBinary(rawPrefix)) {
         return {
           ...basePayload,
           kind: "binary",
@@ -289,11 +304,17 @@ export async function readExplorerFileBytes({
           truncated: true,
         };
       }
+      const encoding = classifyTextEncoding(rawPrefix);
+      // Trim any un-terminated multibyte tail so we never hand back an interrupted
+      // UTF-8 character. Only utf-8 is trimmed: latin1 has no multi-byte structure,
+      // and treating its high bytes as continuations would drop a real character.
+      const bytes =
+        encoding === "utf-8" ? rawPrefix.subarray(0, completeUtf8End(rawPrefix)) : rawPrefix;
       return {
         ...basePayload,
         kind: "text",
-        encoding: "utf-8",
-        bytes: prefix,
+        encoding,
+        bytes,
         mimeType: textMimeTypeForExtension(ext),
         truncated: true,
       };
@@ -341,7 +362,12 @@ export async function readExplorerFileBytes({
       };
     }
 
-    if (isLikelyBinary(buffer) || !isValidUtf8(buffer)) {
+    // Full read: a hard binary signal (null byte or control spam) wins; otherwise
+    // treat it as text even when the bytes aren't valid UTF-8. The old
+    // `!isValidUtf8(buffer)` arm misclassified non-UTF-8 text (latin1 logs) as
+    // binary; the sniff is the same signal as isLikelyBinary, so this stays
+    // consistent with the truncated path above.
+    if (isLikelyBinary(buffer)) {
       return {
         ...basePayload,
         kind: "binary",
@@ -352,10 +378,11 @@ export async function readExplorerFileBytes({
       };
     }
 
+    const encoding = classifyTextEncoding(buffer);
     return {
       ...basePayload,
       kind: "text",
-      encoding: "utf-8",
+      encoding,
       bytes: buffer,
       mimeType: textMimeTypeForExtension(ext),
       truncated: false,
@@ -388,11 +415,11 @@ export async function streamExplorerFile(
     // path stalls the daemon for seconds on a multi-hundred-MB file before a
     // single chunk goes out, which freezes every client waiting on the daemon.
     if (!isImage && maxBytes !== undefined && advertisedSize > maxBytes) {
-      const isBinary = await isPreviewPrefixBinary(handle, maxBytes);
+      const { isBinary, encoding } = await classifyPreviewPrefix(handle, maxBytes);
       await consume({
         path: normalizeRelativePath({ root, targetPath: filePath.requestedPath }),
         kind: isBinary ? "binary" : "text",
-        encoding: isBinary ? "binary" : "utf-8",
+        encoding: isBinary ? "binary" : encoding,
         mimeType: isBinary ? "application/octet-stream" : textMimeTypeForExtension(ext),
         size: advertisedSize,
         modifiedAt: stats.mtime.toISOString(),
@@ -400,7 +427,9 @@ export async function streamExplorerFile(
         truncated: true,
         chunks: isBinary
           ? emptyFileChunks()
-          : readFileHandleChunks(handle, maxBytes, advertisedRevision),
+          : readFileHandleChunks(handle, maxBytes, advertisedRevision, {
+              trimUtf8Tail: !isBinary && encoding === "utf-8",
+            }),
       });
       return;
     }
@@ -435,11 +464,18 @@ export async function streamExplorerFile(
 // Classification for the preview cap: same rules as readExplorerFileBytes, so
 // a file previews identically whether it arrives over the binary channel (this
 // path) or the JSON fallback.
-async function isPreviewPrefixBinary(handle: FileHandle, maxBytes: number): Promise<boolean> {
+async function classifyPreviewPrefix(
+  handle: FileHandle,
+  maxBytes: number,
+): Promise<{ isBinary: boolean; encoding: ExplorerTextEncoding }> {
   const buffer = Buffer.allocUnsafe(maxBytes);
   const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
   const prefix = buffer.subarray(0, bytesRead);
-  return prefix.includes(0) || !isValidUtf8Prefix(prefix);
+  if (sniffBinary(prefix)) {
+    // The caller keeps "binary" when isBinary, so this value is unused there.
+    return { isBinary: true, encoding: "utf-8" };
+  }
+  return { isBinary: false, encoding: classifyTextEncoding(prefix) };
 }
 
 async function* emptyFileChunks(): AsyncIterable<Uint8Array> {
@@ -487,6 +523,7 @@ async function* readFileHandleChunks(
   handle: FileHandle,
   advertisedSize: number,
   advertisedRevision: string,
+  options: { trimUtf8Tail?: boolean } = {},
 ): AsyncIterable<Uint8Array> {
   let position = 0;
   while (position < advertisedSize) {
@@ -498,7 +535,18 @@ async function* readFileHandleChunks(
       throw new Error("File changed during transfer");
     }
     position += bytesRead;
-    yield chunk.subarray(0, bytesRead);
+    const delivered = chunk.subarray(0, bytesRead);
+    if (options.trimUtf8Tail) {
+      // The preview cap can slice a multi-byte UTF-8 character at the end of
+      // the stream. Trim the final chunk to a complete character so the client
+      // never decodes a trailing U+FFFD. (Only done for utf-8 — latin1 has no
+      // multi-byte structure to preserve.)
+      if (position >= advertisedSize) {
+        yield delivered.subarray(0, completeUtf8End(delivered));
+        break;
+      }
+    }
+    yield delivered;
   }
 
   const finalStats = await handle.stat({ bigint: true });
@@ -788,25 +836,76 @@ function isLikelyBinary(buffer: Buffer): boolean {
   return suspicious / buffer.length > 0.3;
 }
 
-function isValidUtf8(buffer: Buffer): boolean {
+function isValidUtf8(bytes: Uint8Array): boolean {
   try {
-    new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     return true;
   } catch {
     return false;
   }
 }
 
-// A preview cap can slice a multi-byte UTF-8 character at the boundary, which
-// would read as invalid encoding and misclassify the file as binary. UTF-8
-// sequences are at most 4 bytes, so at most 3 dangling tail bytes can be
-// incomplete — validate excluding them.
-function isValidUtf8Prefix(bytes: Uint8Array): boolean {
-  const end = Math.max(0, bytes.length - 3);
-  try {
-    new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, end));
-    return true;
-  } catch {
+// Hard binary sniff for a preview prefix: a null byte anywhere in the served
+// prefix wins (matching the pre-fix `prefix.includes(0)`, so a header null at
+// any offset in the cap is still caught); otherwise the control-byte ratio of
+// the leading sample decides. High bytes that are *not* control (0x80-0xFF in
+// latin1/windows-1252 text) never count, so non-UTF-8 text is not treated as
+// binary here.
+function sniffBinary(bytes: Uint8Array): boolean {
+  if (bytes.length === 0) {
     return false;
   }
+  if (bytes.includes(0)) {
+    return true;
+  }
+  const sampleLength = Math.min(FILE_TYPE_SAMPLE_BYTES, bytes.length);
+  let suspicious = 0;
+  for (let idx = 0; idx < sampleLength; idx += 1) {
+    const byte = bytes[idx];
+    if (byte === 127 || (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13)) {
+      suspicious += 1;
+    }
+  }
+  return suspicious / sampleLength > 0.3;
+}
+
+// Text encoding for a buffer the sniff already cleared as text: utf-8 when it
+// validates after trimming any dangling split character, otherwise latin1.
+// Trimming first matters: rejecting just the trailing 3 bytes can itself cut a
+// fresh multibyte lead and falsely mark a complete UTF-8 file as non-UTF-8.
+// Latin1 is the safe fallback for non-UTF-8 text — every byte maps to a code point.
+function classifyTextEncoding(bytes: Uint8Array): ExplorerTextEncoding {
+  const trimmed = bytes.subarray(0, completeUtf8End(bytes));
+  return isValidUtf8(trimmed) ? "utf-8" : "latin1";
+}
+
+// Cut `bytes` to the last complete UTF-8 character. If the buffer ends inside a
+// multi-byte sequence (dangling continuation bytes, or a lead byte with missing
+// continuations), backtrack to just before its start byte so the caller never
+// returns an interrupted character. Start-only checks are applied to the terminal
+// sequence; ASCII and complete multi-byte characters are kept intact.
+function completeUtf8End(bytes: Uint8Array): number {
+  let index = bytes.length - 1;
+  while (index >= 0 && (bytes[index] & 0xc0) === 0x80) {
+    index -= 1;
+  }
+  // All-continuation tail with no lead byte visible — nothing clean to cut to.
+  if (index < 0) {
+    return bytes.length;
+  }
+  const lead = bytes[index];
+  let expectedLength: number;
+  if (lead < 0x80) {
+    expectedLength = 1;
+  } else if (lead < 0xe0) {
+    expectedLength = 2;
+  } else if (lead < 0xf0) {
+    expectedLength = 3;
+  } else {
+    expectedLength = 4;
+  }
+  const have = bytes.length - index;
+  // If the trailing sequence holds all its continuation bytes it is complete —
+  // keep it. Otherwise the lead byte (and its continuations) are dangling.
+  return have >= expectedLength ? bytes.length : index;
 }
