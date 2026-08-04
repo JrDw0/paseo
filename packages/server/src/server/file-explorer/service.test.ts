@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   getExplorerFileVersion,
   readExplorerFile,
+  readExplorerFileBytes,
   streamExplorerFile,
   writeExplorerFile,
 } from "./service.js";
@@ -192,6 +193,27 @@ describe("file explorer service", () => {
       expect(result.encoding).toBe("none");
       expect(result.content).toBeUndefined();
       expect(result.mimeType).toBe("application/octet-stream");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a sampled binary file without reading its full contents", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "payload.bin");
+      // Null byte inside the 8KB sniff window, well past it in total size:
+      // a regression that falls back to reading the whole file is observable
+      // through the returned bytes.
+      const content = Buffer.alloc(8192 * 4, 0x61);
+      content[0] = 0x00;
+      await writeFile(filePath, content);
+
+      const result = await readExplorerFileBytes({ root, relativePath: "payload.bin" });
+
+      expect(result.kind).toBe("binary");
+      expect(result.bytes.length).toBe(0);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
