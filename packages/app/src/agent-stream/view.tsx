@@ -69,7 +69,6 @@ import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import { MessageJumpSheet, type MessageJumpEntry } from "@/components/message-jump-sheet";
 import { formatTimeAgo } from "@/utils/time";
 import { useMessageJumpIndex } from "@/hooks/use-message-jump-index";
-import { useMessageJumpTargetWindow } from "@/hooks/use-message-jump-target-window";
 import type { JumpIndexEntry } from "@/timeline/jump-index";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 import { decideMessageJump, findLoadedMessageJumpTarget } from "./jump-decision";
@@ -700,19 +699,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const effectiveStreamHead = useRetainedValue(streamHead, isActive);
     const effectiveTurnPresentation = useRetainedValue(turnPresentation, isActive);
     const isTurnActive = effectiveTurnPresentation.isActive;
-    const targetWindowController = useMessageJumpTargetWindow({
-      client,
-      agentId,
-      isActive: !isWeb && isActive,
-    });
-    const clearTargetWindow = targetWindowController.clear;
-    const openTargetWindow = targetWindowController.open;
-    const retryTargetWindow = targetWindowController.retry;
-    const targetWindowIsActive = !isWeb && isActive && targetWindowController.active;
-    const displayStreamItems = targetWindowIsActive
-      ? targetWindowController.items
-      : effectiveStreamItems;
-    const displayStreamHead = targetWindowIsActive ? EMPTY_STREAM_HEAD : effectiveStreamHead;
+    const displayStreamItems = effectiveStreamItems;
+    const displayStreamHead = effectiveStreamHead;
     // Keep retained history outside the 48ms live-head flush path.
     const preparedToolCallHistory = useMemo(
       () => prepareToolCallHistory(toolCallDetailLevel, displayStreamItems),
@@ -787,7 +775,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ref,
       () => ({
         scrollToBottom(reason = "jump-to-bottom") {
-          clearTargetWindow();
           viewportRef.current?.scrollToBottom(reason);
         },
         scrollToMessage(messageId: string) {
@@ -797,11 +784,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           viewportRef.current?.prepareForViewportChange();
         },
       }),
-      [clearTargetWindow],
+      [],
     );
 
     const scrollToBottom = useCallback(() => {
-      clearTargetWindow();
       if (!isTimelineDetached) {
         viewportRef.current?.scrollToBottom("jump-to-bottom");
         return;
@@ -814,7 +800,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         scrollToBottom: () => viewportRef.current?.scrollToBottom("jump-to-bottom"),
         onError: handleTimelineHistoryLoadError,
       });
-    }, [agentId, clearTargetWindow, handleTimelineHistoryLoadError, isTimelineDetached, resolvedServerId]);
+    }, [agentId, handleTimelineHistoryLoadError, isTimelineDetached, resolvedServerId]);
 
     const [isMessageJumpSheetOpen, setIsMessageJumpSheetOpen] = useState(false);
     const [streamContainerWidth, setStreamContainerWidth] = useState<number | null>(null);
@@ -887,9 +873,17 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       ],
       [streamLayout.history, streamLayout.liveHead],
     );
+    // Fetch feedback for a jump that needs timeline backfill: a pinned notice
+    // while pages stream in, plus an error + retry when the daemon cannot cover
+    // the target (jump-backfill throws instead of silently hanging).
+    const [messageJumpFetch, setMessageJumpFetch] = useState<{
+      entry: MessageJumpEntry;
+      status: "loading" | "error";
+    } | null>(null);
+    const messageJumpFetchRef = useRef<string | null>(null);
     const [pendingMessageJump, setPendingMessageJump] = useState<MessageJumpEntry | null>(null);
     useEffect(() => {
-      if (!pendingMessageJump || !isWeb) {
+      if (!pendingMessageJump) {
         return;
       }
       const targetId = findLoadedMessageJumpTarget(renderedStreamItems, pendingMessageJump);
@@ -907,42 +901,54 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       (entry: MessageJumpEntry) => {
         setIsMessageJumpSheetOpen(false);
         if (entry.seq <= 0) {
-          clearTargetWindow();
           viewportRef.current?.scrollToMessage?.(entry.id);
           return;
         }
-        if (isWeb) {
-          const decision = decideMessageJump(entry, {
-            isSeqCovered: () => Boolean(findLoadedMessageJumpTarget(renderedStreamItems, entry)),
-          });
-          if (decision.kind === "scroll") {
-            setPendingMessageJump(entry);
-            return;
-          }
-          void driveJumpBackfill({
-            targetSeq: entry.seq,
-            readStartSeq: () => {
-              const currentCursor = useSessionStore
-                .getState()
-                .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
-              return currentCursor?.startSeq ?? Number.POSITIVE_INFINITY;
-            },
-            readEpoch: () =>
-              useSessionStore
-                .getState()
-                .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId)?.epoch ?? entry.epoch,
-            fetchPage: (request) =>
-              getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, request),
-            onCovered: () => setPendingMessageJump(entry),
-          }).catch((error) => {
-            console.warn("[Timeline] failed to backfill message jump target", error);
-          });
+        const decision = decideMessageJump(entry, {
+          isSeqCovered: () => Boolean(findLoadedMessageJumpTarget(renderedStreamItems, entry)),
+        });
+        if (decision.kind === "scroll") {
+          setPendingMessageJump(entry);
           return;
         }
-        openTargetWindow(entry);
+        messageJumpFetchRef.current = entry.id;
+        setMessageJumpFetch({ entry, status: "loading" });
+        void driveJumpBackfill({
+          targetSeq: entry.seq,
+          readStartSeq: () => {
+            const currentCursor = useSessionStore
+              .getState()
+              .sessions[resolvedServerId]?.agentTimelineCursor.get(agentId);
+            return currentCursor?.startSeq ?? Number.POSITIVE_INFINITY;
+          },
+          readEpoch: () =>
+            useSessionStore.getState().sessions[resolvedServerId]?.agentTimelineCursor.get(agentId)
+              ?.epoch ?? entry.epoch,
+          fetchPage: (request) =>
+            getHostRuntimeStore().fetchAgentTimeline(resolvedServerId, agentId, request),
+          onCovered: () => {
+            if (messageJumpFetchRef.current === entry.id) {
+              messageJumpFetchRef.current = null;
+              setMessageJumpFetch(null);
+            }
+            setPendingMessageJump(entry);
+          },
+        }).catch((error) => {
+          console.warn("[Timeline] failed to backfill message jump target", error);
+          if (messageJumpFetchRef.current === entry.id) {
+            messageJumpFetchRef.current = null;
+            setMessageJumpFetch({ entry, status: "error" });
+          }
+        });
       },
-      [agentId, clearTargetWindow, openTargetWindow, renderedStreamItems, resolvedServerId],
+      [agentId, renderedStreamItems, resolvedServerId],
     );
+
+    const retryMessageJumpFetch = useCallback(() => {
+      if (messageJumpFetch?.status === "error") {
+        performMessageJump(messageJumpFetch.entry);
+      }
+    }, [messageJumpFetch, performMessageJump]);
 
     const handleJumpToMessage = useCallback(
       (entry: MessageJumpEntry) => {
@@ -1370,32 +1376,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [expandedToolCallGroupIds, isMobile, projectedToolCalls.historyGroupUpdatesByHostId],
     );
 
-    let targetWindowView: ReactNode = null;
-    if (targetWindowController.status === "loading" && targetWindowController.target) {
-      targetWindowView = (
-        <View style={stylesheet.targetWindowNotice} testID="message-jump-target-loading">
-          <ThemedLoadingSpinner size="small" uniProps={mutedColorMapping} />
-        </View>
-      );
-    } else if (targetWindowController.status === "error" && targetWindowController.target) {
-      targetWindowView = (
-        <View style={stylesheet.targetWindowNotice} testID="message-jump-target-error">
-          <Text style={stylesheet.targetWindowNoticeText}>
-            {t("agentPanel.states.timelineSyncFailed")}
-          </Text>
-          <Pressable
-            style={stylesheet.targetWindowRetryButton}
-            onPress={retryTargetWindow}
-            accessibilityRole="button"
-            accessibilityLabel={t("common.actions.retry")}
-            testID="message-jump-target-retry"
-          >
-            <Text style={stylesheet.targetWindowRetryText}>{t("common.actions.retry")}</Text>
-          </Pressable>
-        </View>
-      );
-    }
-
     return (
       <ToolCallSheetProvider>
         <AssistantSelectionCopySurface
@@ -1426,20 +1406,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               listStyle: stylesheet.list,
               baseListContentContainerStyle: stylesheet.listContentContainer,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
-              targetWindow: {
-                active: targetWindowIsActive,
-                generation: targetWindowController.generation,
-                suppressBottomAnchor: isActive && targetWindowController.suppressBottomAnchor,
-                status:
-                  targetWindowController.status === "idle"
-                    ? "ready"
-                    : targetWindowController.status,
-                targetMessageId: targetWindowController.targetMessageId,
-                focusRevision: targetWindowController.focusRevision,
-                error: targetWindowController.error,
-                hasNewer: targetWindowController.hasNewer,
-                onRetry: retryTargetWindow,
-              },
             })}
           </MessageOuterSpacingProvider>
           <ChatOutlineRail
@@ -1447,7 +1413,38 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             activePrompt={chatOutline.activePrompt}
             onJumpToPrompt={chatOutline.jumpToPrompt}
           />
-          {targetWindowView}
+          {messageJumpFetch ? (
+            <Animated.View
+              style={stylesheet.messageJumpNotice}
+              entering={scrollIndicatorFadeIn}
+              exiting={scrollIndicatorFadeOut}
+              testID={
+                messageJumpFetch.status === "loading"
+                  ? "message-jump-locating"
+                  : "message-jump-locate-error"
+              }
+            >
+              {messageJumpFetch.status === "loading" ? (
+                <ThemedLoadingSpinner size="small" uniProps={mutedColorMapping} />
+              ) : null}
+              <Text style={stylesheet.messageJumpNoticeText}>
+                {messageJumpFetch.status === "loading"
+                  ? t("agentStream.messageJump.locating")
+                  : t("agentStream.messageJump.locateFailed")}
+              </Text>
+              {messageJumpFetch.status === "error" ? (
+                <Pressable
+                  style={stylesheet.messageJumpRetryButton}
+                  onPress={retryMessageJumpFetch}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("common.actions.retry")}
+                  testID="message-jump-retry"
+                >
+                  <Text style={stylesheet.messageJumpRetryText}>{t("common.actions.retry")}</Text>
+                </Pressable>
+              ) : null}
+            </Animated.View>
+          ) : null}
           <Animated.View
             style={[
               stylesheet.floatingActionsContainer,
@@ -1466,7 +1463,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             >
               <List size={20} color={stylesheet.messageJumpIcon.color} />
             </Pressable>
-            {(targetWindowIsActive || !isNearBottom || isTimelineDetached) && (
+            {(!isNearBottom || isTimelineDetached) && (
               <Animated.View entering={scrollIndicatorFadeIn} exiting={scrollIndicatorFadeOut}>
                 <Pressable
                   style={stylesheet.floatingActionButton}
@@ -1989,7 +1986,7 @@ const stylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },
-  targetWindowNotice: {
+  messageJumpNotice: {
     position: "absolute",
     top: theme.spacing[2],
     left: theme.spacing[2],
@@ -1997,23 +1994,22 @@ const stylesheet = StyleSheet.create((theme) => ({
     zIndex: 2,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
     borderRadius: theme.spacing[1],
     backgroundColor: theme.colors.surface2,
   },
-  targetWindowNoticeText: {
+  messageJumpNoticeText: {
     flex: 1,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
   },
-  targetWindowRetryButton: {
+  messageJumpRetryButton: {
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
   },
-  targetWindowRetryText: {
+  messageJumpRetryText: {
     color: theme.colors.accent,
     fontSize: theme.fontSize.xs,
   },

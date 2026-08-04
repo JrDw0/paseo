@@ -199,6 +199,8 @@ export const es: TranslationResources = {
       imageMessage: "(Imagen)",
       attachmentMessage: "(Adjunto)",
       close: "Cerrar",
+      locating: "Buscando el mensaje en el historial…",
+      locateFailed: "No se pudo cargar esa parte del historial",
     },
     permission: {
       plan: "Plan",

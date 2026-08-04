@@ -199,6 +199,8 @@ export const ja: TranslationResources = {
       imageMessage: "（画像）",
       attachmentMessage: "（添付ファイル）",
       close: "閉じる",
+      locating: "履歴内のメッセージを探しています…",
+      locateFailed: "履歴のその部分を読み込めませんでした",
     },
     permission: {
       plan: "プラン",

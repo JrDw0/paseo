@@ -201,6 +201,8 @@ export const fr: TranslationResources = {
       imageMessage: "(Image)",
       attachmentMessage: "(Pièce jointe)",
       close: "Fermer",
+      locating: "Recherche du message dans l'historique…",
+      locateFailed: "Impossible de charger cette partie de l'historique",
     },
     permission: {
       plan: "Plan",
