@@ -72,6 +72,7 @@ interface BottomAnchorControllerDriver {
   beginUserScroll: () => void;
   endUserScroll: (params: { isNearBottom: boolean }) => void;
   detachByUser: () => void;
+  detachProgrammatically: () => void;
   handleViewportMetricsChange: (params: {
     previousViewportWidth: number;
     viewportWidth: number;
@@ -607,6 +608,13 @@ function createBottomAnchorControllerDriver(
       cancelPendingRequest("user_scrolled_away");
       setModeInternal("detached");
     },
+    detachProgrammatically() {
+      // Programmatic release (e.g. message jump to a mid-stream row) is an
+      // explicit intent even while the anchor is suppressed; unlike a user
+      // gesture it never cancels detached — it forces it.
+      cancelPendingRequest("programmatic_anchor_release");
+      setModeInternal("detached");
+    },
     handleViewportMetricsChange(params) {
       if (
         params.previousViewportWidth !== params.viewportWidth ||
@@ -868,6 +876,9 @@ export function useBottomAnchorController(input: {
     },
     detachByUser() {
       driverRef.current?.detachByUser();
+    },
+    detachProgrammatically() {
+      driverRef.current?.detachProgrammatically();
     },
     handleViewportLayout() {},
     handleViewportMetricsChange(params: {
