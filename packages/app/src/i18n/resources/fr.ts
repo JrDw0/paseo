@@ -1583,6 +1583,7 @@ export const fr: TranslationResources = {
       noPreview: "Aucun aperçu disponible",
       binaryPreviewUnavailable: "Aperçu binaire indisponible",
       truncatedPreview: "Aperçu tronqué — fichier complet : {{size}}",
+      loadFull: "Charger en entier",
       failedToLoad: "Échec du chargement du fichier",
       failedToLoadPreview: "Échec du chargement de l'aperçu du fichier",
       editor: {
