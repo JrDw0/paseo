@@ -195,6 +195,8 @@ export const ru: TranslationResources = {
       imageMessage: "(Изображение)",
       attachmentMessage: "(Вложение)",
       close: "Закрыть",
+      locating: "Поиск сообщения в истории…",
+      locateFailed: "Не удалось загрузить эту часть истории",
     },
     permission: {
       plan: "План",

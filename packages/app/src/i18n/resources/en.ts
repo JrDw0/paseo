@@ -193,6 +193,8 @@ export const en = {
       imageMessage: "(Image)",
       attachmentMessage: "(Attachment)",
       close: "Close",
+      locating: "Locating message in history…",
+      locateFailed: "Couldn't load that part of history",
     },
     permission: {
       plan: "Plan",

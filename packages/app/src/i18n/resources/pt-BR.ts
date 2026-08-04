@@ -195,6 +195,8 @@ export const ptBR: TranslationResources = {
       imageMessage: "(Imagem)",
       attachmentMessage: "(Anexo)",
       close: "Fechar",
+      locating: "Localizando a mensagem no histórico…",
+      locateFailed: "Não foi possível carregar essa parte do histórico",
     },
     permission: {
       plan: "Plano",

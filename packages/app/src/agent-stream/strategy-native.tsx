@@ -1,7 +1,6 @@
 import {
   Fragment,
   type ReactElement,
-  useLayoutEffect,
   useCallback,
   useEffect,
   useMemo,
@@ -95,7 +94,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     listEmptyComponent,
     viewportRef,
     routeBottomAnchorRequest,
-    targetWindow,
     isAuthoritativeHistoryReady,
     onNearBottomChange,
     onScrollMovementChange,
@@ -178,9 +176,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   const messageJumpTokenRef = useRef(0);
   const messageJumpRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const evaluateHistoryStart = useStableEvent(() => {
-    if (targetWindow?.suppressBottomAnchor) {
-      return;
-    }
     const metrics = streamViewportMetricsRef.current;
     const hasMeasuredViewport =
       metrics.viewportMeasuredForKey === metrics.containerKey &&
@@ -260,7 +255,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     isAuthoritativeHistoryReady,
     renderStrategy: "inverted-stream",
     transportBehavior: bottomAnchorTransportBehavior,
-    suppress: targetWindow?.suppressBottomAnchor === true,
+    suppress: false,
     getMeasurementState: () => streamViewportMetricsRef.current,
     isNearBottom: () => {
       const metrics = streamViewportMetricsRef.current;
@@ -277,8 +272,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   // Android's maintainVisibleContentPosition ignores the list inversion transform and
   // fights the controller's offset-zero correction while the live header grows.
   const maintainVisibleContentPosition =
-    targetWindow?.suppressBottomAnchor ||
-    (Platform.OS === "android" && bottomAnchorController.mode === "sticky-bottom")
+    Platform.OS === "android" && bottomAnchorController.mode === "sticky-bottom"
       ? undefined
       : DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION;
 
@@ -352,27 +346,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   }, [clearMessageJumpRetryTimeout]);
 
   useEffect(() => {
-    if (targetWindow?.active) {
-      return;
-    }
-    pendingMessageJumpRef.current = null;
-    clearMessageJumpRetryTimeout();
-  }, [clearMessageJumpRetryTimeout, targetWindow?.active, targetWindow?.generation]);
-
-  useLayoutEffect(() => {
-    if (!targetWindow?.active || !targetWindow.targetMessageId) {
-      return;
-    }
-    scrollToMessage(targetWindow.targetMessageId, false);
-  }, [
-    scrollToMessage,
-    targetWindow?.active,
-    targetWindow?.generation,
-    targetWindow?.focusRevision,
-    targetWindow?.targetMessageId,
-  ]);
-
-  useEffect(() => {
     streamViewportMetricsRef.current = {
       containerKey: "native-virtualized",
       contentHeight: 0,
@@ -433,11 +406,8 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   }, [clearNativeViewportSettling, markNativeViewportSettling]);
 
   useEffect(() => {
-    if (targetWindow?.suppressBottomAnchor) {
-      return;
-    }
     bottomAnchorController.prepareForStickyContentChange();
-  }, [bottomAnchorController, historyRows, segments.liveHead, targetWindow?.suppressBottomAnchor]);
+  }, [bottomAnchorController, historyRows, segments.liveHead]);
 
   useEffect(() => {
     const handle: StreamViewportHandle = {
@@ -615,13 +585,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
 
   useEffect(() => {
     evaluateHistoryStart();
-  }, [
-    evaluateHistoryStart,
-    hasOlderHistory,
-    isLoadingOlderHistory,
-    olderHistoryProgressKey,
-    targetWindow?.suppressBottomAnchor,
-  ]);
+  }, [evaluateHistoryStart, hasOlderHistory, isLoadingOlderHistory, olderHistoryProgressKey]);
 
   const renderItem = useStableEvent(
     ({ item, index }: ListRenderItemInfo<StreamItem>): ReactElement | null => {
@@ -682,9 +646,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
   return (
     <FlatList
       ref={flatListRef}
-      key={
-        targetWindow?.active ? `message-jump-target:${targetWindow.generation}` : "agent-chat-live"
-      }
+      key="agent-chat-live"
       data={historyRows}
       renderItem={renderItem}
       keyExtractor={keyExtractor}

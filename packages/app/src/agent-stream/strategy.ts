@@ -80,17 +80,6 @@ export interface StreamRenderInput {
   listStyle: StyleProp<ViewStyle>;
   baseListContentContainerStyle: StyleProp<ViewStyle>;
   forwardListContentContainerStyle: StyleProp<ViewStyle>;
-  targetWindow?: {
-    active: boolean;
-    generation: number;
-    suppressBottomAnchor: boolean;
-    status: "loading" | "ready" | "expanding" | "error";
-    targetMessageId: string | null;
-    focusRevision: number;
-    error: string | null;
-    hasNewer: boolean;
-    onRetry: () => void;
-  };
 }
 
 export interface ResolveStreamRenderStrategyInput {

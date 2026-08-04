@@ -195,6 +195,8 @@ export const ar: TranslationResources = {
       imageMessage: "(صورة)",
       attachmentMessage: "(مرفق)",
       close: "إغلاق",
+      locating: "جارٍ البحث عن الرسالة في السجل…",
+      locateFailed: "تعذّر تحميل هذا الجزء من السجل",
     },
     permission: {
       plan: "يخطط",

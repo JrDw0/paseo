@@ -131,5 +131,12 @@ export async function driveJumpBackfill(input: {
       throw new Error("Timeline backfill made no progress");
     }
   }
+  const coveredStartSeq = readStartSeq();
+  if (!Number.isFinite(coveredStartSeq) || coveredStartSeq > targetSeq) {
+    // The capped window probe can return an empty/absent span (target older
+    // than anything the daemon serves); surface that instead of letting the
+    // caller wait on a row that never renders.
+    throw new Error("Timeline backfill did not cover the target");
+  }
   onCovered();
 }

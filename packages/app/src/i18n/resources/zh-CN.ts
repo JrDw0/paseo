@@ -195,6 +195,8 @@ export const zhCN: TranslationResources = {
       imageMessage: "（图片）",
       attachmentMessage: "（附件）",
       close: "关闭",
+      locating: "正在定位历史消息…",
+      locateFailed: "无法加载该位置的历史消息",
     },
     permission: {
       plan: "Plan",
