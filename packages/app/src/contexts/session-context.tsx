@@ -11,7 +11,7 @@ import {
   refreshAgentInitializationTimeout,
 } from "@/hooks/use-agent-initialization";
 import { prefetchProvidersSnapshot } from "@/hooks/use-providers-snapshot";
-import { generateMessageId, type StreamItem } from "@/types/stream";
+import { type StreamItem } from "@/types/stream";
 import {
   createSessionAgentStreamReducerQueue,
   processTimelineResponse,
@@ -42,7 +42,6 @@ import { useVoiceAudioEngineOptional, useVoiceRuntimeOptional } from "@/contexts
 import type { AudioPlaybackSource } from "@/voice/audio-engine-types";
 import {
   useSessionStore,
-  type MessageEntry,
   type SessionState,
   type TimelinePageUpdate,
 } from "@/stores/session-store";
@@ -70,7 +69,6 @@ import { revalidateSessionAfterResume } from "@/contexts/session-resume-revalida
 // Re-export types from session-store and draft-store for backward compatibility
 export type { DraftInput } from "@/stores/draft-store";
 export type {
-  MessageEntry,
   Agent,
   ExplorerEntry,
   ExplorerFile,
@@ -295,30 +293,6 @@ function executeTimelineSideEffects(input: {
   }
 }
 
-function applyToolResultToMessages(
-  toolCallId: string,
-  result: unknown,
-): (prev: MessageEntry[]) => MessageEntry[] {
-  return (prev) =>
-    prev.map((msg) =>
-      msg.type === "tool_call" && msg.id === toolCallId
-        ? { ...msg, result, status: "completed" as const }
-        : msg,
-    );
-}
-
-function applyToolErrorToMessages(
-  toolCallId: string,
-  error: unknown,
-): (prev: MessageEntry[]) => MessageEntry[] {
-  return (prev) =>
-    prev.map((msg) =>
-      msg.type === "tool_call" && msg.id === toolCallId
-        ? { ...msg, error, status: "failed" as const }
-        : msg,
-    );
-}
-
 function notifyVoiceAbortFailure(
   data: Extract<SessionOutboundMessage, { type: "activity_log" }>["payload"],
   notifyError: (message: string) => void,
@@ -362,8 +336,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
   // Zustand store actions
   const setIsPlayingAudio = useSessionStore((state) => state.setIsPlayingAudio);
-  const setMessages = useSessionStore((state) => state.setMessages);
-  const setCurrentAssistantMessage = useSessionStore((state) => state.setCurrentAssistantMessage);
   const setAgentStreamTail = useSessionStore((state) => state.setAgentStreamTail);
   const setAgentStreamHead = useSessionStore((state) => state.setAgentStreamHead);
   const setAgentStreamState = useSessionStore((state) => state.setAgentStreamState);
@@ -943,94 +915,19 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       if (data.type === "system" && data.content.includes("Transcribing")) {
         return;
       }
-
-      if (data.type === "tool_call" && data.metadata) {
-        const toolCallId =
-          typeof data.metadata.toolCallId === "string" ? data.metadata.toolCallId : "";
-        const toolName = typeof data.metadata.toolName === "string" ? data.metadata.toolName : "";
-        const args = data.metadata.arguments;
-
-        setMessages(serverId, (prev) => [
-          ...prev,
-          {
-            type: "tool_call",
-            id: toolCallId,
-            timestamp: Date.now(),
-            toolName,
-            args,
-            status: "executing",
-          },
-        ]);
+      // tool_call/tool_result/transcript/assistant events were tracked in a
+      // dead `messages` array with zero readers; that state was removed.
+      // The only live behavior left here is surfacing voice-abort failures.
+      if (
+        data.type === "tool_call" ||
+        data.type === "tool_result" ||
+        data.type === "transcript" ||
+        data.type === "assistant"
+      ) {
         return;
-      }
-
-      if (data.type === "tool_result" && data.metadata) {
-        const toolCallId =
-          typeof data.metadata.toolCallId === "string" ? data.metadata.toolCallId : "";
-        const result = data.metadata.result;
-
-        const applyToolResult = applyToolResultToMessages(toolCallId, result);
-        setMessages(serverId, applyToolResult);
-        return;
-      }
-
-      if (data.type === "error" && data.metadata && "toolCallId" in data.metadata) {
-        const toolCallId =
-          typeof data.metadata.toolCallId === "string" ? data.metadata.toolCallId : "";
-        const error = data.metadata.error;
-
-        const applyToolError = applyToolErrorToMessages(toolCallId, error);
-        setMessages(serverId, applyToolError);
       }
 
       notifyVoiceAbortFailure(data, toast.error);
-
-      let activityType: "system" | "info" | "success" | "error" = "info";
-      if (data.type === "error") activityType = "error";
-
-      if (data.type === "transcript") {
-        setMessages(serverId, (prev) => [
-          ...prev,
-          {
-            type: "user",
-            id: generateMessageId(),
-            timestamp: Date.now(),
-            message: data.content,
-          },
-        ]);
-        return;
-      }
-
-      if (data.type === "assistant") {
-        setMessages(serverId, (prev) => [
-          ...prev,
-          {
-            type: "assistant",
-            id: generateMessageId(),
-            timestamp: Date.now(),
-            message: data.content,
-          },
-        ]);
-        setCurrentAssistantMessage(serverId, "");
-        return;
-      }
-
-      setMessages(serverId, (prev) => [
-        ...prev,
-        {
-          type: "activity",
-          id: generateMessageId(),
-          timestamp: Date.now(),
-          activityType,
-          message: data.content,
-          metadata: data.metadata,
-        },
-      ]);
-    });
-
-    const unsubChunk = client.on("assistant_chunk", (message) => {
-      if (message.type !== "assistant_chunk") return;
-      setCurrentAssistantMessage(serverId, (prev) => prev + message.payload.chunk);
     });
 
     const unsubTranscription = client.on("transcription_result", (message) => {
@@ -1041,8 +938,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       if (!transcriptText) {
         return;
       }
-
-      setCurrentAssistantMessage(serverId, "");
     });
 
     const unsubVoiceInputState = client.on("voice_input_state", (message) => {
@@ -1085,7 +980,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       unsubPermissionResolved();
       unsubAudioOutput();
       unsubActivity();
-      unsubChunk();
       unsubTranscription();
       unsubVoiceInputState();
       unsubTerminalAttention();
@@ -1096,8 +990,6 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     queryClient,
     serverId,
     setIsPlayingAudio,
-    setMessages,
-    setCurrentAssistantMessage,
     setAgentStreamTail,
     setAgentStreamHead,
     setAgentStreamState,
