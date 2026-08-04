@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceDescriptorPayload } from "@getpaseo/protocol/messages";
 import { normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import {
@@ -154,6 +154,7 @@ function seedTimeline(serverId: string, text: string): void {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   const store = useSessionStore.getState();
   store.clearSession(SERVER_ID);
   for (const serverId of LRU_SERVER_IDS) store.clearSession(serverId);
@@ -335,5 +336,100 @@ describe("ReplicaCache", () => {
       version: 3,
       hosts: [],
     });
+  });
+});
+
+describe("subscription triggers", () => {
+  async function startPrimedCache(storage: MemoryStorage): Promise<ReplicaCache> {
+    const cache = new ReplicaCache(storage);
+    cache.setHosts([SERVER_ID]);
+    seedSession();
+    await cache.flush();
+    cache.start();
+    return cache;
+  }
+
+  function persistedFocusedAgentId(storage: MemoryStorage): string | undefined {
+    const raw = storage.values.get("@paseo:replica-cache");
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    return parsed.hosts[0]?.agents[0]?.snapshot.id;
+  }
+
+  function seedSecondAgent(): void {
+    const store = useSessionStore.getState();
+    store.setAgents(SERVER_ID, (agents) =>
+      new Map(agents).set("agent-2", agent("agent-2", "workspace-2", "/repo/other")),
+    );
+    store.setWorkspaces(SERVER_ID, (workspaces) =>
+      new Map(workspaces).set(
+        "workspace-2",
+        normalizeWorkspaceDescriptor(workspace("workspace-2", "project-2", "/repo/other")),
+      ),
+    );
+  }
+
+  it("ignores stream head updates", async () => {
+    const storage = new MemoryStorage();
+    await startPrimedCache(storage);
+    const setItem = vi.spyOn(storage, "setItem");
+    vi.useFakeTimers();
+
+    useSessionStore
+      .getState()
+      .setAgentStreamHead(SERVER_ID, new Map([["agent-1", [message("head-1", "Streaming")]]]));
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it("persists when the focused agent changes", async () => {
+    const storage = new MemoryStorage();
+    await startPrimedCache(storage);
+    seedSecondAgent();
+    const setItem = vi.spyOn(storage, "setItem");
+    vi.useFakeTimers();
+
+    useSessionStore.getState().setFocusedAgentId(SERVER_ID, "agent-2");
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(setItem).toHaveBeenCalled();
+    expect(persistedFocusedAgentId(storage)).toBe("agent-2");
+  });
+
+  it("persists when the focused agent object is replaced", async () => {
+    const storage = new MemoryStorage();
+    await startPrimedCache(storage);
+    const setItem = vi.spyOn(storage, "setItem");
+    vi.useFakeTimers();
+
+    useSessionStore.getState().setAgents(SERVER_ID, (agents) => {
+      const focused = agents.get("agent-1");
+      if (!focused) return agents;
+      return new Map(agents).set("agent-1", { ...focused, status: "running" });
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(setItem).toHaveBeenCalled();
+    const raw = storage.values.get("@paseo:replica-cache");
+    expect(raw).toBeDefined();
+    expect(JSON.parse(raw ?? "").hosts[0]?.agents[0]?.snapshot.status).toBe("running");
+  });
+
+  it("ignores timeline tail updates for unfocused agents", async () => {
+    const storage = new MemoryStorage();
+    await startPrimedCache(storage);
+    seedSecondAgent();
+    const setItem = vi.spyOn(storage, "setItem");
+    vi.useFakeTimers();
+
+    useSessionStore
+      .getState()
+      .setAgentStreamTail(SERVER_ID, (tails) =>
+        new Map(tails).set("agent-2", [message("message-other", "Other agent")]),
+      );
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(setItem).not.toHaveBeenCalled();
   });
 });

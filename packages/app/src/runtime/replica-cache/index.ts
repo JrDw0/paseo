@@ -14,6 +14,7 @@ import {
   selectAgentTimelineState,
   useSessionStore,
   type Agent,
+  type AgentTimelineCursorState,
   type SessionReplica,
   type SessionState,
   type ProjectDescriptor,
@@ -56,6 +57,34 @@ const StoredCacheSchema = z.object({
 
 type StoredAgent = z.infer<typeof StoredAgentSchema>;
 type StoredHost = z.infer<typeof StoredHostSchema>;
+
+// The subscribe handler diffs these per-server references to decide whether a
+// store change touched data captureSessions would persist. They mirror exactly
+// what captureSessions reads; anything else (stream head, hydration flags,
+// pending permissions, ...) must not schedule a write. Compare resolved
+// object references, never the session object or the containing Maps —
+// agentStreamHead lives on the same objects and changes constantly.
+interface WatchedSessionRefs {
+  focusedAgentId: string | null;
+  agent: Agent | undefined;
+  workspace: WorkspaceDescriptor | undefined;
+  project: ProjectDescriptor | undefined;
+  tail: StreamItem[] | undefined;
+  cursor: AgentTimelineCursorState | null;
+  hasOlder: boolean;
+}
+
+function watchedSessionRefsEqual(a: WatchedSessionRefs, b: WatchedSessionRefs): boolean {
+  return (
+    a.focusedAgentId === b.focusedAgentId &&
+    a.agent === b.agent &&
+    a.workspace === b.workspace &&
+    a.project === b.project &&
+    a.tail === b.tail &&
+    a.cursor === b.cursor &&
+    a.hasOlder === b.hasOlder
+  );
+}
 
 export interface ReplicaCacheStorage {
   getItem: (key: string) => Promise<string | null>;
@@ -255,6 +284,7 @@ export class ReplicaCache {
   private readonly storedHosts = new Map<string, StoredHost>();
   private readonly lastFocusedAgentIds = new Map<string, string>();
   private readonly capturedSessions = new Map<string, SessionState>();
+  private readonly watchedRefs = new Map<string, WatchedSessionRefs>();
   private readonly maxBytes: number;
   private needsPersist = false;
   private unsubscribe: (() => void) | null = null;
@@ -289,6 +319,9 @@ export class ReplicaCache {
     for (const serverId of this.capturedSessions.keys()) {
       if (!next.has(serverId)) this.capturedSessions.delete(serverId);
     }
+    for (const serverId of this.watchedRefs.keys()) {
+      if (!next.has(serverId)) this.watchedRefs.delete(serverId);
+    }
     if (removedStoredHost) this.needsPersist = true;
     if (this.unsubscribe && this.needsPersist) this.schedulePersist();
   }
@@ -321,19 +354,38 @@ export class ReplicaCache {
     for (const host of this.storedHosts.values()) {
       useSessionStore.getState().restoreSessionReplica(host.serverId, deserializeHost(host));
       const session = useSessionStore.getState().sessions[host.serverId];
-      if (session) this.capturedSessions.set(host.serverId, session);
+      if (session) {
+        this.capturedSessions.set(host.serverId, session);
+        this.watchedRefs.set(host.serverId, this.captureWatchedRefs(host.serverId, session));
+      }
     }
   }
 
   start(): void {
     if (this.unsubscribe) return;
+    // Prime the diff baseline so the first store change after start is judged
+    // by an actual diff instead of a missing entry.
+    const current = useSessionStore.getState();
+    for (const serverId of this.activeServerIds) {
+      const session = current.sessions[serverId];
+      if (!session) continue;
+      if (session.focusedAgentId) this.lastFocusedAgentIds.set(serverId, session.focusedAgentId);
+      this.watchedRefs.set(serverId, this.captureWatchedRefs(serverId, session));
+    }
     this.unsubscribe = useSessionStore.subscribe((state) => {
       if (this.activeServerIds.size === 0) return;
+      let changed = false;
       for (const serverId of this.activeServerIds) {
-        const focusedAgentId = state.sessions[serverId]?.focusedAgentId;
-        if (focusedAgentId) this.lastFocusedAgentIds.set(serverId, focusedAgentId);
+        const session = state.sessions[serverId];
+        if (!session) continue;
+        if (session.focusedAgentId) this.lastFocusedAgentIds.set(serverId, session.focusedAgentId);
+        const refs = this.captureWatchedRefs(serverId, session);
+        const previous = this.watchedRefs.get(serverId);
+        if (previous && watchedSessionRefsEqual(previous, refs)) continue;
+        this.watchedRefs.set(serverId, refs);
+        changed = true;
       }
-      this.schedulePersist();
+      if (changed) this.schedulePersist();
     });
     if (this.needsPersist) this.schedulePersist();
   }
@@ -354,6 +406,11 @@ export class ReplicaCache {
       this.capturedSessions.delete(oldServerId);
       this.capturedSessions.set(newServerId, capturedSession);
     }
+    const watchedRefs = this.watchedRefs.get(oldServerId);
+    if (watchedRefs) {
+      this.watchedRefs.delete(oldServerId);
+      this.watchedRefs.set(newServerId, watchedRefs);
+    }
     if (this.activeServerIds.delete(oldServerId)) this.activeServerIds.add(newServerId);
     this.needsPersist = true;
     this.schedulePersist();
@@ -372,6 +429,22 @@ export class ReplicaCache {
       .then(() => this.storage.setItem(STORAGE_KEY, payload));
     this.writeQueue = write;
     await write.catch(() => undefined);
+  }
+
+  private captureWatchedRefs(serverId: string, session: SessionState): WatchedSessionRefs {
+    const focusedAgentId = session.focusedAgentId ?? this.lastFocusedAgentIds.get(serverId) ?? null;
+    const agent = focusedAgentId ? session.agents.get(focusedAgentId) : undefined;
+    const workspace = agent
+      ? ((agent.workspaceId ? session.workspaces.get(agent.workspaceId) : undefined) ??
+        Array.from(session.workspaces.values()).find(
+          (candidate) => candidate.workspaceDirectory === agent.cwd,
+        ))
+      : undefined;
+    const project = workspace ? session.projects.get(workspace.projectId) : undefined;
+    const tail = focusedAgentId ? session.agentStreamTail.get(focusedAgentId) : undefined;
+    const cursor = agent ? (session.agentTimelineCursor.get(agent.id) ?? null) : null;
+    const hasOlder = agent ? (session.agentTimelineHasOlder.get(agent.id) ?? false) : false;
+    return { focusedAgentId, agent, workspace, project, tail, cursor, hasOlder };
   }
 
   private captureSessions(): void {
