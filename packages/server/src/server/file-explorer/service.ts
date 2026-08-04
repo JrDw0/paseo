@@ -254,6 +254,25 @@ export async function readExplorerFileBytes({
       revision: fileRevision(stats),
     };
 
+    // Sniff the leading bytes before reading the whole file. A large binary
+    // (e.g. an .apk the user tapped by accident) must fail fast here — the
+    // eager readFile() + byte-by-byte scan below stalls the daemon for
+    // seconds, which freezes every client waiting on that daemon.
+    if (!(ext in IMAGE_MIME_TYPES) && stats.size > 0) {
+      const sampleLength = Math.min(FILE_TYPE_SAMPLE_BYTES, Number(stats.size));
+      const sample = Buffer.allocUnsafe(sampleLength);
+      const { bytesRead } = await handle.read(sample, 0, sampleLength, 0);
+      if (bytesRead > 0 && isLikelyBinary(sample.subarray(0, bytesRead))) {
+        return {
+          ...basePayload,
+          kind: "binary",
+          encoding: "binary",
+          bytes: Buffer.alloc(0),
+          mimeType: "application/octet-stream",
+        };
+      }
+    }
+
     const buffer = await handle.readFile();
     if (ext in IMAGE_MIME_TYPES) {
       return {
