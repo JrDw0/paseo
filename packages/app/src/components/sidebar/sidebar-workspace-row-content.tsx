@@ -318,7 +318,7 @@ function WorkspaceStatusIndicator({
   if (bucket === "needs_input") {
     return (
       <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-needs_input">
-        <ThemedCircleAlert size={compact ? 16 : 14} uniProps={amberColorMapping} />
+        <ThemedCircleAlert size={compact ? 16 : 14} uniProps={needsInputColorMapping} />
       </View>
     );
   }

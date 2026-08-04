@@ -691,7 +691,7 @@ function StatusWorkspaceRowInner({
   const trailing = useSidebarWorkspaceTrailing();
 
   const isDesktop = !isTouchPlatform;
-  const scriptSummary = isDesktop ? selectWorkspaceScriptSummary(workspace.scripts) : null;
+  const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
   const isCompact = useIsCompactFormFactor();
 
   const accessibilityState = useMemo(() => ({ selected }), [selected]);
