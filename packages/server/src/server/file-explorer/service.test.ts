@@ -261,6 +261,144 @@ describe("file explorer service", () => {
     }
   });
 
+  it("returns only the leading maxBytes for a large text file, marked truncated", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "huge.log");
+      const maxBytes = 64 * 1024;
+      const content = Buffer.alloc(300 * 1024, 0x61);
+      await writeFile(filePath, content);
+
+      const result = await readExplorerFileBytes({ root, relativePath: "huge.log", maxBytes });
+
+      expect(result.kind).toBe("text");
+      expect(result.truncated).toBe(true);
+      expect(result.size).toBe(content.length);
+      expect(result.bytes.length).toBe(maxBytes);
+      expect(Buffer.from(result.bytes).equals(content.subarray(0, maxBytes))).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("returns no body for a large binary above maxBytes, marked truncated", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "huge.bin");
+      const maxBytes = 64 * 1024;
+      const content = Buffer.alloc(300 * 1024, 0x61);
+      // Truncated previews classify from the served prefix only — real
+      // binaries (zip/apk/ELF/images) carry a null in their header, which is
+      // what puts them inside this window.
+      content[32 * 1024] = 0x00;
+      await writeFile(filePath, content);
+
+      const result = await readExplorerFileBytes({ root, relativePath: "huge.bin", maxBytes });
+
+      expect(result.kind).toBe("binary");
+      expect(result.truncated).toBe(true);
+      expect(result.bytes.length).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a file within maxBytes complete and untruncated", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "small.log");
+      const content = "a full small file\n";
+      await writeFile(filePath, content, "utf-8");
+
+      const result = await readExplorerFileBytes({
+        root,
+        relativePath: "small.log",
+        maxBytes: 1024 * 1024,
+      });
+
+      expect(result.kind).toBe("text");
+      expect(result.truncated).toBe(false);
+      expect(Buffer.from(result.bytes).toString("utf-8")).toBe(content);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("treats a multi-byte UTF-8 character cut at the maxBytes boundary as text", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "unicode.log");
+      // "中" encodes to 3 bytes (e4 b8 ad); size the file so the cap lands
+      // after its lead byte, then append more text past the cap.
+      const maxBytes = 64 * 1024;
+      const head = Buffer.alloc(maxBytes - 1, 0x61);
+      const tail = Buffer.concat([Buffer.from("中文"), Buffer.alloc(64 * 1024, 0x62)]);
+      await writeFile(filePath, Buffer.concat([head, tail]));
+
+      const result = await readExplorerFileBytes({ root, relativePath: "unicode.log", maxBytes });
+
+      expect(result.kind).toBe("text");
+      expect(result.truncated).toBe(true);
+      expect(result.bytes.length).toBe(maxBytes);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("streams only the maxBytes prefix for a large text file", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "huge.log");
+      const maxBytes = 64 * 1024;
+      const content = Buffer.alloc(300 * 1024, 0x61);
+      await writeFile(filePath, content);
+
+      await streamExplorerFile({ root, relativePath: "huge.log", maxBytes }, async (file) => {
+        expect(file.kind).toBe("text");
+        expect(file.truncated).toBe(true);
+        expect(file.size).toBe(content.length);
+        const chunks: Buffer[] = [];
+        for await (const chunk of file.chunks) {
+          chunks.push(Buffer.from(chunk));
+        }
+        const received = Buffer.concat(chunks);
+        expect(received.length).toBe(maxBytes);
+        expect(received.equals(content.subarray(0, maxBytes))).toBe(true);
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("streams no body for a large binary above maxBytes", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "huge.bin");
+      const maxBytes = 64 * 1024;
+      const content = Buffer.alloc(300 * 1024, 0x61);
+      content[32 * 1024] = 0x00;
+      await writeFile(filePath, content);
+
+      await streamExplorerFile({ root, relativePath: "huge.bin", maxBytes }, async (file) => {
+        expect(file.kind).toBe("binary");
+        expect(file.truncated).toBe(true);
+        let received = 0;
+        for await (const chunk of file.chunks) {
+          received += chunk.byteLength;
+        }
+        expect(received).toBe(0);
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("fails a stream when the file grows after its revision is advertised", async () => {
     const root = await createTempDir("paseo-file-stream-growth-");
 

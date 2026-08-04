@@ -240,6 +240,9 @@ export interface ExplorerFile {
   size: number;
   modifiedAt: string;
   revision?: string;
+  // True when the daemon returned only the leading FILE_PREVIEW_MAX_BYTES prefix:
+  // content is partial, size is the full on-disk size.
+  truncated: boolean;
 }
 
 export interface ExplorerDirectory {

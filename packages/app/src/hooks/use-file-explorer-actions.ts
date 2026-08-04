@@ -6,6 +6,7 @@ import {
   type ExplorerDirectory,
 } from "@/stores/session-store";
 import { explorerFileFromReadResult } from "@/file-explorer/read-result";
+import { FILE_PREVIEW_MAX_BYTES } from "@/file-pane/live-file/hook";
 
 function createExplorerState(): AgentFileExplorerState {
   return {
@@ -205,7 +206,12 @@ export function useFileExplorerActions(params: { serverId: string } & FileExplor
       }
 
       try {
-        const file = await client.readFile(normalizedWorkspaceRoot, normalizedPath);
+        const file = await client.readFile(
+          normalizedWorkspaceRoot,
+          normalizedPath,
+          undefined,
+          FILE_PREVIEW_MAX_BYTES,
+        );
         updateExplorerState((state) => {
           const nextState: AgentFileExplorerState = {
             ...state,

@@ -274,28 +274,45 @@ function CodeTextPreview({
   );
 }
 
-function FilePreviewBody({
-  preview,
-  isLoading,
-  isMobile,
-  location,
-  navigationRevision,
-  imagePreviewUri,
-  renderMode,
-}: FilePreviewBodyProps) {
-  const theme = UnistylesRuntime.getTheme();
+function TruncatedPreviewBanner({ sizeBytes }: { sizeBytes: number }) {
   const { t } = useTranslation();
-  const filePath = location.path;
-  const isMarkdownFile =
-    preview?.kind === "text" && isRenderedMarkdownFile(filePath) && !location.lineStart;
-  const isHtmlFile =
-    preview?.kind === "text" && isRenderedHtmlFile(filePath) && !location.lineStart;
+  return (
+    <View style={styles.truncatedBanner} testID="file-truncated-banner">
+      <Text style={styles.truncatedBannerText}>
+        {t("panels.file.truncatedPreview", { size: formatFileSize({ size: sizeBytes }) })}
+      </Text>
+    </View>
+  );
+}
+
+interface TextPreviewBodyProps {
+  preview: ExplorerFile;
+  filePath: string;
+  lineStart?: number;
+  lineEnd?: number;
+  navigationRevision: number;
+  isMobile: boolean;
+  renderMode?: "preview" | "source";
+}
+
+function TextPreviewBody({
+  preview,
+  filePath,
+  lineStart,
+  lineEnd,
+  navigationRevision,
+  isMobile,
+  renderMode,
+}: TextPreviewBodyProps) {
+  const theme = UnistylesRuntime.getTheme();
+  const isMarkdownFile = isRenderedMarkdownFile(filePath) && !lineStart;
+  const isHtmlFile = isRenderedHtmlFile(filePath) && !lineStart;
   const showHtmlPreview = isHtmlFile && renderMode !== "source";
 
   const previewScrollRef = useRef<RNScrollView>(null);
 
   const highlightedLines = useMemo(() => {
-    if (!preview || preview.kind !== "text" || isMarkdownFile || showHtmlPreview) {
+    if (isMarkdownFile || showHtmlPreview) {
       return null;
     }
 
@@ -312,16 +329,11 @@ function FilePreviewBody({
       return null;
     }
     return clampLineSelection({
-      lineStart: location.lineStart,
-      lineEnd: location.lineEnd,
+      lineStart,
+      lineEnd,
       lineCount: highlightedLines.length,
     });
-  }, [highlightedLines, location.lineEnd, location.lineStart]);
-
-  const imageSource = useMemo(
-    () => (imagePreviewUri ? { uri: imagePreviewUri } : null),
-    [imagePreviewUri],
-  );
+  }, [highlightedLines, lineEnd, lineStart]);
 
   useEffect(() => {
     if (!lineSelection) {
@@ -335,6 +347,68 @@ function FilePreviewBody({
     }, 0);
     return () => clearTimeout(timeout);
   }, [lineHeight, lineSelection, navigationRevision]);
+
+  const truncatedBanner = preview.truncated ? (
+    <TruncatedPreviewBanner sizeBytes={preview.size} />
+  ) : null;
+
+  if (isMarkdownFile) {
+    return (
+      <View style={styles.previewScrollContainer}>
+        {truncatedBanner}
+        <RNScrollView
+          ref={previewScrollRef}
+          style={styles.previewContent}
+          contentContainerStyle={styles.previewMarkdownScrollContent}
+          showsVerticalScrollIndicator
+        >
+          <MarkdownRenderer text={preview.content ?? ""} />
+        </RNScrollView>
+      </View>
+    );
+  }
+
+  if (showHtmlPreview) {
+    return (
+      <View style={styles.previewScrollContainer}>
+        {truncatedBanner}
+        <HtmlPreview html={preview.content ?? ""} testID="file-html-preview" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.previewScrollContainer}>
+      {truncatedBanner}
+      <CodeTextPreview
+        highlightedLines={highlightedLines}
+        content={preview.content ?? ""}
+        gutterWidth={gutterWidth}
+        lineSelection={lineSelection}
+        isMobile={isMobile}
+        previewScrollRef={previewScrollRef}
+      />
+    </View>
+  );
+}
+
+function FilePreviewBody({
+  preview,
+  isLoading,
+  isMobile,
+  location,
+  navigationRevision,
+  imagePreviewUri,
+  renderMode,
+}: FilePreviewBodyProps) {
+  const { t } = useTranslation();
+
+  const previewScrollRef = useRef<RNScrollView>(null);
+
+  const imageSource = useMemo(
+    () => (imagePreviewUri ? { uri: imagePreviewUri } : null),
+    [imagePreviewUri],
+  );
 
   if (isLoading && !preview) {
     return (
@@ -354,37 +428,15 @@ function FilePreviewBody({
   }
 
   if (preview.kind === "text") {
-    if (isMarkdownFile) {
-      return (
-        <View style={styles.previewScrollContainer}>
-          <RNScrollView
-            ref={previewScrollRef}
-            style={styles.previewContent}
-            contentContainerStyle={styles.previewMarkdownScrollContent}
-            showsVerticalScrollIndicator
-          >
-            <MarkdownRenderer text={preview.content ?? ""} />
-          </RNScrollView>
-        </View>
-      );
-    }
-
-    if (showHtmlPreview) {
-      return (
-        <View style={styles.previewScrollContainer}>
-          <HtmlPreview html={preview.content ?? ""} testID="file-html-preview" />
-        </View>
-      );
-    }
-
     return (
-      <CodeTextPreview
-        highlightedLines={highlightedLines}
-        content={preview.content ?? ""}
-        gutterWidth={gutterWidth}
-        lineSelection={lineSelection}
+      <TextPreviewBody
+        preview={preview}
+        filePath={location.path}
+        lineStart={location.lineStart}
+        lineEnd={location.lineEnd}
+        navigationRevision={navigationRevision}
         isMobile={isMobile}
-        previewScrollRef={previewScrollRef}
+        renderMode={renderMode}
       />
     );
   }
@@ -901,6 +953,17 @@ const styles = StyleSheet.create((theme) => ({
   },
   binaryMetaText: {
     marginTop: theme.spacing[2],
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  truncatedBanner: {
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceSidebar,
+  },
+  truncatedBannerText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
   },
