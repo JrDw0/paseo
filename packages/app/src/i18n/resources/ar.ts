@@ -1505,6 +1505,12 @@ export const ar: TranslationResources = {
     failed: "فشل تنزيل الملف.",
     shareFile: "مشاركة الملف",
     shareFileNamed: "مشاركة{{fileName}}",
+    open: "Open",
+    save: "Save",
+    savedToDirectory: "Saved to the selected folder.",
+    saveCancelled: "Save cancelled.",
+    openFailed: "No app on this device can open this file.",
+    saveFailed: "Failed to save the file.",
   },
   menu: {
     backdrop: "خلفية القائمة",

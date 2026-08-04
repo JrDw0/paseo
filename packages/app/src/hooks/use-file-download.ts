@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useHosts } from "@/runtime/host-runtime";
 import { useDownloadStore } from "@/stores/download-store";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
+import { useSessionStore } from "@/stores/session-store";
 
 interface UseFileDownloadParams {
   serverId: string;
@@ -13,7 +14,9 @@ interface UseFileDownloadParams {
  * Returns a stable callback that downloads a single workspace file by its
  * workspace-relative path. Shared by the file explorer tree and the git diff
  * pane so both surfaces download through the same host token + download-store
- * pipeline instead of duplicating the plumbing.
+ * pipeline instead of duplicating the plumbing. When the host has no direct
+ * HTTP connection (e.g. relay-only), the store streams the file over the
+ * session WebSocket via the session client.
  */
 export function useFileDownload({
   serverId,
@@ -25,6 +28,7 @@ export function useFileDownload({
     () => daemons.find((daemon) => daemon.serverId === serverId),
     [daemons, serverId],
   );
+  const client = useSessionStore((state) => state.sessions[serverId]?.client ?? null);
   const normalizedWorkspaceRoot = useMemo(() => workspaceRoot.trim(), [workspaceRoot]);
   const workspaceScopeId = useMemo(
     () => workspaceId?.trim() || normalizedWorkspaceRoot,
@@ -47,10 +51,20 @@ export function useFileDownload({
         scopeId: workspaceScopeId,
         fileName,
         path,
+        workspaceRoot: normalizedWorkspaceRoot,
+        client,
         daemonProfile,
         requestFileDownloadToken: (targetPath) => requestFileDownloadToken(targetPath),
       });
     },
-    [daemonProfile, requestFileDownloadToken, serverId, startDownload, workspaceScopeId],
+    [
+      client,
+      daemonProfile,
+      normalizedWorkspaceRoot,
+      requestFileDownloadToken,
+      serverId,
+      startDownload,
+      workspaceScopeId,
+    ],
   );
 }

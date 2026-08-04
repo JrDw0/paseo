@@ -1485,6 +1485,12 @@ export const zhCN: TranslationResources = {
     failed: "下载文件失败。",
     shareFile: "共享文件",
     shareFileNamed: "共享 {{fileName}}",
+    open: "打开",
+    save: "保存",
+    savedToDirectory: "已保存到所选文件夹。",
+    saveCancelled: "已取消保存。",
+    openFailed: "找不到能打开此文件的应用。",
+    saveFailed: "保存文件失败。",
   },
   menu: {
     backdrop: "菜单背景",

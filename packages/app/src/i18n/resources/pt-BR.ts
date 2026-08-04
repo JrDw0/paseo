@@ -1534,6 +1534,12 @@ export const ptBR: TranslationResources = {
     failed: "Falha ao baixar arquivo.",
     shareFile: "Compartilhar arquivo",
     shareFileNamed: "Compartilhar {{fileName}}",
+    open: "Open",
+    save: "Save",
+    savedToDirectory: "Saved to the selected folder.",
+    saveCancelled: "Save cancelled.",
+    openFailed: "No app on this device can open this file.",
+    saveFailed: "Failed to save the file.",
   },
   menu: {
     backdrop: "Fundo do menu",

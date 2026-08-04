@@ -1552,6 +1552,12 @@ export const fr: TranslationResources = {
     failed: "Échec du téléchargement du fichier.",
     shareFile: "Partager un fichier",
     shareFileNamed: "Partager{{fileName}}",
+    open: "Open",
+    save: "Save",
+    savedToDirectory: "Saved to the selected folder.",
+    saveCancelled: "Save cancelled.",
+    openFailed: "No app on this device can open this file.",
+    saveFailed: "Failed to save the file.",
   },
   menu: {
     backdrop: "Toile de fond du menu",
