@@ -429,6 +429,34 @@ export interface FileReadResult {
   modifiedAt: string;
   revision?: string;
 }
+export interface FileStreamBeginMetadata {
+  mime: string;
+  size: number;
+  encoding: Extract<
+    FileTransferFrame,
+    { opcode: typeof FileTransferOpcode.FileBegin }
+  >["metadata"]["encoding"];
+  modifiedAt: string;
+  revision?: string;
+}
+/**
+ * Handlers for streamFile. Chunks arrive as the daemon's binary frames come in,
+ * so callers can append to disk incrementally instead of buffering the file.
+ * A handler that throws fails the stream — streamFile rejects with that error.
+ */
+export interface FileStreamHandlers {
+  onBegin?: (metadata: FileStreamBeginMetadata) => void;
+  onChunk?: (chunk: Uint8Array, receivedBytes: number) => void;
+}
+export interface FileStreamResult {
+  mime: string;
+  size: number;
+  receivedBytes: number;
+  path: string;
+  kind: FileReadResult["kind"];
+  modifiedAt: string;
+  revision?: string;
+}
 export interface FileUploadInput {
   fileName: string;
   mimeType: string;
@@ -902,6 +930,26 @@ interface BinaryFileTransferState extends PendingBinaryFileRead {
   chunks: Uint8Array[];
 }
 
+interface PendingFileStreamRequest {
+  cwd: string;
+  path: string;
+  handlers: FileStreamHandlers;
+}
+
+interface ActiveFileStream extends PendingFileStreamRequest {
+  mime: string;
+  size: number;
+  encoding: FileStreamBeginMetadata["encoding"];
+  modifiedAt: string;
+  revision?: string;
+  receivedBytes: number;
+  handlerError: Error | null;
+}
+
+type FileStreamCompletion =
+  | { kind: "ok"; result: FileStreamResult }
+  | { kind: "error"; error: Error };
+
 type RpcWaitResult<T> = { kind: "ok"; value: T } | { kind: "error"; error: DaemonRpcError };
 type GetDaemonConfigResponse = Extract<
   SessionOutboundMessage,
@@ -970,6 +1018,11 @@ const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_SESSION_RPC_TIMEOUT_MS = 60_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
+// A binary file transfer lasts as long as the transfer does, so it cannot use
+// the 60s session RPC deadline — a large file over a slow relay always blew it.
+// Consumers show live progress for the wait, and daemon liveness (ping timeout)
+// still fails-fast on a dead connection.
+const FILE_TRANSFER_RPC_TIMEOUT_MS = 30 * 60_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
 const LIVENESS_HEARTBEAT_INTERVAL_MS = 10_000;
 const LIVENESS_HEARTBEAT_TIMEOUT_MS = 15_000;
@@ -1151,6 +1204,9 @@ export class DaemonClient {
   private pendingBinaryFileReads = new Map<string, PendingBinaryFileRead>();
   private activeBinaryFileTransfers = new Map<string, BinaryFileTransferState>();
   private completedBinaryFileReads = new Map<string, FileReadResult>();
+  private pendingFileStreams = new Map<string, PendingFileStreamRequest>();
+  private activeFileStreams = new Map<string, ActiveFileStream>();
+  private completedFileStreams = new Map<string, FileStreamCompletion>();
   private logger: Logger;
   private pendingSendQueue: PendingSend[] = [];
   private readonly logConnectionPath: "direct" | "relay";
@@ -4247,6 +4303,8 @@ export class DaemonClient {
         ...(acceptBinary ? { acceptBinary: true } : {}),
       },
       responseType: "file_explorer_response",
+      // Binary mode transfers the file before the response completes.
+      ...(acceptBinary ? { timeout: FILE_TRANSFER_RPC_TIMEOUT_MS } : {}),
     });
   }
 
@@ -4285,6 +4343,60 @@ export class DaemonClient {
     } finally {
       this.pendingBinaryFileReads.delete(resolvedRequestId);
       this.activeBinaryFileTransfers.delete(resolvedRequestId);
+    }
+  }
+
+  /**
+   * Streams a file from the daemon over the session transport, delivering bytes
+   * through handlers as binary frames arrive instead of buffering the whole
+   * file. Works on any connection — direct TCP or E2EE relay — because it rides
+   * the existing WebSocket. Use this for downloads; use readFile for previews.
+   */
+  async streamFile(
+    cwd: string,
+    path: string,
+    handlers: FileStreamHandlers,
+    requestId?: string,
+  ): Promise<FileStreamResult> {
+    const resolvedRequestId = this.createRequestId(requestId);
+    this.pendingFileStreams.set(resolvedRequestId, { cwd, path, handlers });
+    try {
+      const payload = await this.requestFileExplorer(cwd, path, "file", resolvedRequestId, true);
+      if (payload.error) {
+        throw new Error(payload.error);
+      }
+      const completion = this.completedFileStreams.get(resolvedRequestId);
+      if (completion) {
+        this.completedFileStreams.delete(resolvedRequestId);
+        if (completion.kind === "error") {
+          throw completion.error;
+        }
+        return completion.result;
+      }
+      if (!payload.file) {
+        throw new Error("File unavailable.");
+      }
+      const legacy = legacyExplorerFileToBytes(payload.file);
+      handlers.onBegin?.({
+        mime: legacy.mime,
+        size: legacy.size,
+        encoding: legacy.kind === "text" ? "utf-8" : "binary",
+        modifiedAt: legacy.modifiedAt,
+        revision: legacy.revision,
+      });
+      handlers.onChunk?.(legacy.bytes, legacy.bytes.byteLength);
+      return {
+        mime: legacy.mime,
+        size: legacy.size,
+        receivedBytes: legacy.bytes.byteLength,
+        path: legacy.path,
+        kind: legacy.kind,
+        modifiedAt: legacy.modifiedAt,
+        revision: legacy.revision,
+      };
+    } finally {
+      this.pendingFileStreams.delete(resolvedRequestId);
+      this.activeFileStreams.delete(resolvedRequestId);
     }
   }
 
@@ -5612,6 +5724,29 @@ export class DaemonClient {
 
   private handleFileTransferFrame(frame: FileTransferFrame): void {
     if (frame.opcode === FileTransferOpcode.FileBegin) {
+      const pendingStream = this.pendingFileStreams.get(frame.requestId);
+      if (pendingStream) {
+        this.activeFileStreams.set(frame.requestId, {
+          ...pendingStream,
+          mime: frame.metadata.mime,
+          size: frame.metadata.size,
+          encoding: frame.metadata.encoding,
+          modifiedAt: frame.metadata.modifiedAt,
+          revision: frame.metadata.revision,
+          receivedBytes: 0,
+          handlerError: null,
+        });
+        this.invokeFileStreamHandler(frame.requestId, (stream) =>
+          stream.handlers.onBegin?.({
+            mime: stream.mime,
+            size: stream.size,
+            encoding: stream.encoding,
+            modifiedAt: stream.modifiedAt,
+            revision: stream.revision,
+          }),
+        );
+        return;
+      }
       const pending = this.pendingBinaryFileReads.get(frame.requestId);
       if (!pending) {
         return;
@@ -5624,6 +5759,48 @@ export class DaemonClient {
         modifiedAt: frame.metadata.modifiedAt,
         revision: frame.metadata.revision,
         chunks: [],
+      });
+      return;
+    }
+
+    const stream = this.activeFileStreams.get(frame.requestId);
+    if (stream) {
+      if (frame.opcode === FileTransferOpcode.FileChunk) {
+        stream.receivedBytes += frame.payload.byteLength;
+        this.invokeFileStreamHandler(frame.requestId, (active) =>
+          active.handlers.onChunk?.(frame.payload, active.receivedBytes),
+        );
+        return;
+      }
+      this.activeFileStreams.delete(frame.requestId);
+      this.completedFileStreams.set(
+        frame.requestId,
+        stream.handlerError
+          ? { kind: "error", error: stream.handlerError }
+          : {
+              kind: "ok",
+              result: {
+                mime: stream.mime,
+                size: stream.size,
+                receivedBytes: stream.receivedBytes,
+                path: stream.path,
+                kind: binaryFileKind(stream.mime, stream.encoding),
+                modifiedAt: stream.modifiedAt,
+                revision: stream.revision,
+              },
+            },
+      );
+      this.handleSessionMessage({
+        type: "file_explorer_response",
+        payload: {
+          cwd: stream.cwd,
+          path: stream.path,
+          mode: "file",
+          directory: null,
+          file: null,
+          error: null,
+          requestId: frame.requestId,
+        },
       });
       return;
     }
@@ -5661,6 +5838,22 @@ export class DaemonClient {
         requestId: frame.requestId,
       },
     });
+  }
+
+  /** A throwing handler fails the stream; the rejection surfaces from streamFile. */
+  private invokeFileStreamHandler(
+    requestId: string,
+    invoke: (stream: ActiveFileStream) => void,
+  ): void {
+    const stream = this.activeFileStreams.get(requestId);
+    if (!stream || stream.handlerError) {
+      return;
+    }
+    try {
+      invoke(stream);
+    } catch (error) {
+      stream.handlerError = error instanceof Error ? error : new Error(String(error));
+    }
   }
 
   private updateConnectionState(

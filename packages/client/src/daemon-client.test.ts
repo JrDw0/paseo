@@ -1930,6 +1930,260 @@ test("readFile resolves from binary file frames when the daemon supports them", 
   expect(new TextDecoder().decode(result.bytes)).toBe("hello");
 });
 
+test("streamFile streams binary file frames through handlers without buffering", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const begins: Array<{ mime: string; size: number }> = [];
+  const chunks: Uint8Array[] = [];
+  const receivedProgress: number[] = [];
+
+  const responsePromise = client.streamFile(
+    "/tmp/project",
+    "movie.bin",
+    {
+      onBegin: (metadata) => begins.push({ mime: metadata.mime, size: metadata.size }),
+      onChunk: (chunk, receivedBytes) => {
+        chunks.push(chunk);
+        receivedProgress.push(receivedBytes);
+      },
+    },
+    "req-stream",
+  );
+
+  expect(JSON.parse(assertStr(mock.sent[0]))).toEqual({
+    type: "session",
+    message: {
+      type: "file_explorer_request",
+      cwd: "/tmp/project",
+      path: "movie.bin",
+      mode: "file",
+      acceptBinary: true,
+      requestId: "req-stream",
+    },
+  });
+
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "req-stream",
+      metadata: {
+        mime: "application/octet-stream",
+        size: 11,
+        encoding: "binary",
+        modifiedAt: "2026-05-02T00:00:00.000Z",
+      },
+    }),
+  );
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "req-stream",
+      payload: new TextEncoder().encode("hello"),
+    }),
+  );
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "req-stream",
+      payload: new TextEncoder().encode(" world"),
+    }),
+  );
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileEnd,
+      requestId: "req-stream",
+    }),
+  );
+
+  const result = await responsePromise;
+  expect(begins).toEqual([{ mime: "application/octet-stream", size: 11 }]);
+  expect(chunks.map((chunk) => new TextDecoder().decode(chunk))).toEqual(["hello", " world"]);
+  expect(receivedProgress).toEqual([5, 11]);
+  expect(result).toMatchObject({
+    mime: "application/octet-stream",
+    size: 11,
+    receivedBytes: 11,
+    path: "movie.bin",
+    kind: "binary",
+    modifiedAt: "2026-05-02T00:00:00.000Z",
+  });
+  expect("bytes" in result).toBe(false);
+});
+
+test("streamFile falls back to a legacy file payload when the daemon answers in JSON", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const begins: Array<{ size: number }> = [];
+  const chunks: Uint8Array[] = [];
+
+  const responsePromise = client.streamFile(
+    "/tmp/project",
+    "logo.png",
+    {
+      onBegin: (metadata) => begins.push({ size: metadata.size }),
+      onChunk: (chunk) => chunks.push(chunk),
+    },
+    "req-legacy-stream",
+  );
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "file_explorer_response",
+      payload: {
+        cwd: "/tmp/project",
+        path: "logo.png",
+        mode: "file",
+        directory: null,
+        file: {
+          path: "logo.png",
+          kind: "image",
+          encoding: "base64",
+          content: "aGVsbG8=",
+          mimeType: "image/png",
+          size: 5,
+          modifiedAt: "2026-05-02T00:00:00.000Z",
+        },
+        error: null,
+        requestId: "req-legacy-stream",
+      },
+    }),
+  );
+
+  const result = await responsePromise;
+  expect(begins).toEqual([{ size: 5 }]);
+  expect(chunks.map((chunk) => new TextDecoder().decode(chunk))).toEqual(["hello"]);
+  expect(result).toMatchObject({
+    mime: "image/png",
+    size: 5,
+    receivedBytes: 5,
+    path: "logo.png",
+    kind: "image",
+  });
+  expect("bytes" in result).toBe(false);
+});
+
+test("streamFile rejects when the daemon reports an error", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const responsePromise = client.streamFile("/tmp/project", "missing.bin", {}, "req-stream-error");
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "file_explorer_response",
+      payload: {
+        cwd: "/tmp/project",
+        path: "missing.bin",
+        mode: "file",
+        directory: null,
+        file: null,
+        error: "File not found",
+        requestId: "req-stream-error",
+      },
+    }),
+  );
+
+  await expect(responsePromise).rejects.toThrow("File not found");
+});
+
+test("streamFile rejects with the handler error when a chunk handler throws", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const responsePromise = client.streamFile(
+    "/tmp/project",
+    "movie.bin",
+    {
+      onChunk: () => {
+        throw new Error("disk full");
+      },
+    },
+    "req-handler-error",
+  );
+
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileBegin,
+      requestId: "req-handler-error",
+      metadata: {
+        mime: "application/octet-stream",
+        size: 5,
+        encoding: "binary",
+        modifiedAt: "2026-05-02T00:00:00.000Z",
+      },
+    }),
+  );
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileChunk,
+      requestId: "req-handler-error",
+      payload: new TextEncoder().encode("hello"),
+    }),
+  );
+  mock.triggerMessage(
+    encodeFileTransferFrame({
+      opcode: FileTransferOpcode.FileEnd,
+      requestId: "req-handler-error",
+    }),
+  );
+
+  await expect(responsePromise).rejects.toThrow("disk full");
+});
+
 test("uploadFile sends metadata request and file bytes as binary chunks", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

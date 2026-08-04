@@ -2,7 +2,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Check, X, XCircle } from "lucide-react-native";
@@ -28,9 +28,18 @@ export function DownloadToast() {
   const downloads = useDownloadStore((state) => state.downloads);
   const activeDownloadId = useDownloadStore((state) => state.activeDownloadId);
   const dismissDownload = useDownloadStore((state) => state.dismissDownload);
+  const openDownload = useDownloadStore((state) => state.openDownload);
+  const saveDownload = useDownloadStore((state) => state.saveDownload);
   const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeDownload = activeDownloadId ? downloads.get(activeDownloadId) : null;
+
+  // A completed Android download waits for the user to open/save or dismiss;
+  // every other toast auto-dismisses.
+  const waitsForAction =
+    activeDownload?.status === "complete" &&
+    Platform.OS === "android" &&
+    Boolean(activeDownload.localUri);
 
   useEffect(() => {
     if (dismissTimeoutRef.current) {
@@ -38,7 +47,7 @@ export function DownloadToast() {
       dismissTimeoutRef.current = null;
     }
 
-    if (activeDownload && activeDownload.status !== "downloading") {
+    if (activeDownload && activeDownload.status !== "downloading" && !waitsForAction) {
       dismissTimeoutRef.current = setTimeout(() => {
         dismissDownload(activeDownload.id);
       }, AUTO_DISMISS_DELAY);
@@ -49,7 +58,7 @@ export function DownloadToast() {
         clearTimeout(dismissTimeoutRef.current);
       }
     };
-  }, [activeDownload, dismissDownload]);
+  }, [activeDownload, dismissDownload, waitsForAction]);
 
   const containerStyle = useMemo(
     () => [styles.container, { bottom: theme.spacing[4] + insets.bottom }],
@@ -61,6 +70,18 @@ export function DownloadToast() {
       dismissDownload(activeDownload.id);
     }
   }, [activeDownload, dismissDownload]);
+
+  const handleOpen = useCallback(() => {
+    if (activeDownload) {
+      void openDownload(activeDownload.id);
+    }
+  }, [activeDownload, openDownload]);
+
+  const handleSave = useCallback(() => {
+    if (activeDownload) {
+      void saveDownload(activeDownload.id);
+    }
+  }, [activeDownload, saveDownload]);
 
   if (!activeDownload) {
     return null;
@@ -83,11 +104,26 @@ export function DownloadToast() {
             {activeDownload.fileName}
           </Text>
           <Text style={styles.status}>{getDownloadStatusText(activeDownload, t)}</Text>
+          {activeDownload.actionMessage ? (
+            <Text style={styles.actionMessage} numberOfLines={2}>
+              {activeDownload.actionMessage}
+            </Text>
+          ) : null}
           {activeDownload.status === "downloading" && activeDownload.progress && (
             <View style={styles.progressBar}>
               <ProgressFill percent={activeDownload.progress.percent} />
             </View>
           )}
+          {waitsForAction ? (
+            <View style={styles.actionsRow}>
+              <Pressable onPress={handleOpen} hitSlop={8} style={styles.actionButton}>
+                <Text style={styles.actionLabel}>{t("downloads.open")}</Text>
+              </Pressable>
+              <Pressable onPress={handleSave} hitSlop={8} style={styles.actionButton}>
+                <Text style={styles.actionLabel}>{t("downloads.save")}</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
         {activeDownload.status !== "downloading" && (
           <Pressable onPress={handleDismiss} hitSlop={8} style={styles.dismiss}>
@@ -151,5 +187,23 @@ const styles = StyleSheet.create((theme) => ({
   },
   dismiss: {
     padding: theme.spacing[1],
+  },
+  actionsRow: {
+    flexDirection: "row",
+    gap: theme.spacing[4],
+    marginTop: theme.spacing[1],
+  },
+  actionButton: {
+    paddingVertical: theme.spacing[1],
+    paddingRight: theme.spacing[2],
+  },
+  actionLabel: {
+    color: theme.colors.primary,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.semibold,
+  },
+  actionMessage: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
 }));

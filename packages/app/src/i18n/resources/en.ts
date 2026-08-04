@@ -1563,6 +1563,12 @@ export const en = {
     failed: "Failed to download file.",
     shareFile: "Share file",
     shareFileNamed: "Share {{fileName}}",
+    open: "Open",
+    save: "Save",
+    savedToDirectory: "Saved to the selected folder.",
+    saveCancelled: "Save cancelled.",
+    openFailed: "No app on this device can open this file.",
+    saveFailed: "Failed to save the file.",
   },
   menu: {
     backdrop: "Menu backdrop",
