@@ -77,7 +77,8 @@ function runPipeline(input: PipelineInput) {
     isMobileBreakpoint: input.isMobileBreakpoint,
   });
   const model = buildAgentStreamRenderModel({
-    agentStatus: input.agentStatus,
+    isTurnActive: input.agentStatus === "running",
+    activeTurnStartedAt: null,
     tail: projectedToolCalls.tail,
     head: projectedToolCalls.head,
     platform: input.platform === "web" ? "web" : "native",
@@ -85,7 +86,7 @@ function runPipeline(input: PipelineInput) {
   });
   const layout = layoutStream({
     strategy,
-    agentStatus: input.agentStatus,
+    isTurnActive: input.agentStatus === "running",
     history: model.history,
     liveHead: model.segments.liveHead,
     timingByAssistantId: model.turnTiming.byAssistantId,

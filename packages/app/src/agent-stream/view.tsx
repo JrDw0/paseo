@@ -67,19 +67,14 @@ import { ToolCallDetailsContent } from "@/components/tool-call-details";
 import { QuestionFormCard } from "@/components/question-form-card";
 import { ToolCallSheetProvider } from "@/components/tool-call-sheet";
 import { MessageJumpSheet, type MessageJumpEntry } from "@/components/message-jump-sheet";
-import { formatTimeAgo } from "@/utils/time";
 import { useMessageJumpIndex } from "@/hooks/use-message-jump-index";
 import type { JumpIndexEntry } from "@/timeline/jump-index";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 import { decideMessageJump, findLoadedMessageJumpTarget } from "./jump-decision";
 import { driveJumpBackfill } from "./jump-backfill";
 import { resolveFloatingActionsRight } from "./floating-actions-layout";
-import {
-  prepareToolCallHistory,
-  projectToolCallDetailLevel,
-} from "@/tool-calls/detail-level/projection";
 import { OverviewToolCallGroupView } from "@/tool-calls/detail-level/overview/view";
-import { type AgentStreamRenderModel, buildAgentStreamRenderModel } from "./model";
+import type { AgentStreamRenderModel } from "./model";
 import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import { ChatOutlineRail } from "@/agent-stream/chat-outline/rail";
@@ -92,7 +87,8 @@ import {
   type InFlightTurnForkHandler,
   type TurnContentStrategy,
 } from "./turn-footer";
-import { layoutStream, type StreamLayoutItem } from "./layout";
+import type { StreamLayoutItem } from "./layout";
+import { useStreamPipeline } from "./use-stream-pipeline";
 import {
   type BottomAnchorLocalRequest,
   type BottomAnchorRouteRequest,
@@ -292,8 +288,6 @@ const AGENT_CAPABILITY_FLAG_KEYS: (keyof AgentCapabilityFlags)[] = [
   "supportsRewindBoth",
 ];
 
-const EMPTY_STREAM_HEAD: StreamItem[] = [];
-
 function useRetainedValue<T>(value: T, active: boolean): T {
   const retainedRef = useRef(value);
   if (active) {
@@ -307,64 +301,6 @@ const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
 // has ended.
 const SCROLL_SETTLE_DELAY_MS = 300;
 const FLOATING_ACTIONS_TRANSITION_MS = 180;
-
-interface LoadedMessageLabel {
-  imageMessage: string;
-  attachmentMessage: string;
-}
-
-function loweredImageFlags(combined: StreamItem[]): Map<string, boolean> {
-  const flags = new Map<string, boolean>();
-  const seen = new Set<string>();
-  for (const item of combined) {
-    if (item.kind !== "user_message" || seen.has(item.id)) {
-      continue;
-    }
-    seen.add(item.id);
-    flags.set(item.id, (item.images?.length ?? 0) > 0);
-  }
-  return flags;
-}
-
-function buildLoadedFallbackJumpEntries(
-  combined: StreamItem[],
-  labels: LoadedMessageLabel,
-  formatTimestamp: (date: Date) => string,
-): MessageJumpEntry[] {
-  const seen = new Set<string>();
-  const entries: MessageJumpEntry[] = [];
-  for (const item of combined) {
-    if (item.kind !== "user_message" || seen.has(item.id)) {
-      continue;
-    }
-    seen.add(item.id);
-    const firstLine = item.text
-      .split("\n")
-      .map((line) => line.trim())
-      .find((line) => line.length > 0);
-    const hasImages = (item.images?.length ?? 0) > 0;
-    const hasAttachments = (item.attachments?.length ?? 0) > 0;
-    let preview: string;
-    if (firstLine) {
-      preview = firstLine;
-    } else if (hasImages) {
-      preview = labels.imageMessage;
-    } else if (hasAttachments) {
-      preview = labels.attachmentMessage;
-    } else {
-      preview = "…";
-    }
-    entries.push({
-      id: item.id,
-      epoch: "",
-      seq: -1,
-      preview,
-      timestampLabel: formatTimestamp(item.timestamp),
-      hasImages,
-    });
-  }
-  return entries;
-}
 
 function findRefreshedMessageJumpEntry(
   original: Pick<MessageJumpEntry, "id" | "seq">,
@@ -699,64 +635,36 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const effectiveStreamHead = useRetainedValue(streamHead, isActive);
     const effectiveTurnPresentation = useRetainedValue(turnPresentation, isActive);
     const isTurnActive = effectiveTurnPresentation.isActive;
-    const displayStreamItems = effectiveStreamItems;
-    const displayStreamHead = effectiveStreamHead;
-    // Keep retained history outside the 48ms live-head flush path.
-    const preparedToolCallHistory = useMemo(
-      () => prepareToolCallHistory(toolCallDetailLevel, displayStreamItems),
-      [displayStreamItems, toolCallDetailLevel],
-    );
-    const projectedToolCalls = useMemo(
-      () =>
-        projectToolCallDetailLevel({
-          level: toolCallDetailLevel,
-          tail: displayStreamItems,
-          head: displayStreamHead ?? EMPTY_STREAM_HEAD,
-          preparedHistory: preparedToolCallHistory,
-          isTurnActive,
-        }),
-      [
-        displayStreamHead,
-        displayStreamItems,
-        isTurnActive,
-        preparedToolCallHistory,
-        toolCallDetailLevel,
-      ],
-    );
-
-    const baseRenderModel = useMemo(() => {
-      return buildAgentStreamRenderModel({
-        isTurnActive,
-        activeTurnStartedAt: effectiveTurnPresentation.startedAt,
-        tail: projectedToolCalls.tail,
-        head: projectedToolCalls.head,
-        platform: isWeb ? "web" : "native",
-        isMobileBreakpoint: isMobile,
-      });
-    }, [
-      isMobile,
-      isTurnActive,
-      projectedToolCalls.head,
-      projectedToolCalls.tail,
-      effectiveTurnPresentation.startedAt,
-    ]);
-    const streamLayout = useMemo(
-      () =>
-        layoutStream({
-          strategy: streamRenderStrategy,
-          isTurnActive,
-          history: baseRenderModel.history,
-          liveHead: baseRenderModel.segments.liveHead,
-          timingByAssistantId: baseRenderModel.turnTiming.byAssistantId,
-        }),
-      [
-        baseRenderModel.history,
-        baseRenderModel.segments.liveHead,
-        baseRenderModel.turnTiming.byAssistantId,
-        isTurnActive,
-        streamRenderStrategy,
-      ],
-    );
+    const [isMessageJumpSheetOpen, setIsMessageJumpSheetOpen] = useState(false);
+    // Jump list is built from the cached full index when the sheet is open, falling
+    // back to the projected tail so the button is still meaningful before the
+    // index loads.
+    const {
+      entries: indexEntries,
+      ready: indexReady,
+      refresh: refreshMessageJumpIndex,
+    } = useMessageJumpIndex({
+      serverId: resolvedServerId,
+      agentId,
+      enabled: isMessageJumpSheetOpen || (!isWeb && isActive),
+    });
+    // 根因 B: tail/head → render model → layout → jump-entry 的整条 useMemo
+    // 派生链抽在 use-stream-pipeline.ts(deps 与原内联实现逐项对应),此处只做接线。
+    const {
+      projectedToolCalls,
+      baseRenderModel,
+      streamLayout,
+      messageJumpEntries,
+      renderedStreamItems,
+    } = useStreamPipeline({
+      toolCallDetailLevel,
+      streamItems: effectiveStreamItems,
+      streamHead: effectiveStreamHead,
+      turnPresentation: effectiveTurnPresentation,
+      isMobileBreakpoint: isMobile,
+      streamRenderStrategy,
+      indexEntries,
+    });
     const handleTimelineHistoryLoadError = useCallback(() => {
       toast?.error(t("agentStream.historyLoadFailed"));
     }, [t, toast]);
@@ -770,6 +678,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       viewportRef,
       onJumpError: handleTimelineHistoryLoadError,
     });
+
 
     useImperativeHandle(
       ref,
@@ -802,7 +711,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       });
     }, [agentId, handleTimelineHistoryLoadError, isTimelineDetached, resolvedServerId]);
 
-    const [isMessageJumpSheetOpen, setIsMessageJumpSheetOpen] = useState(false);
     const [streamContainerWidth, setStreamContainerWidth] = useState<number | null>(null);
 
     const openMessageJumpSheet = useCallback(() => setIsMessageJumpSheetOpen(true), []);
@@ -819,104 +727,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         }),
       }),
       [isMobile, streamContainerWidth],
-    );
-
-    // Jump list is built from the cached full index when the sheet is open, falling
-    // back to the projected tail so the button is still meaningful before the
-    // index loads.
-    const {
-      entries: indexEntries,
-      ready: indexReady,
-      refresh: refreshMessageJumpIndex,
-    } = useMessageJumpIndex({
-      serverId: resolvedServerId,
-      agentId,
-      enabled: isMessageJumpSheetOpen || (!isWeb && isActive),
-    });
-    // The tail is the whole history and the head re-references every 48ms stream
-    // flush, so the O(tail) scans stay in tail-keyed memos and each flush only
-    // re-walks the (small) head. Head items come after tail items, and tail ids
-    // win on collision — the same order/precedence as scanning tail+head combined.
-    const tailImageFlags = useMemo(
-      () => loweredImageFlags(projectedToolCalls.tail),
-      [projectedToolCalls.tail],
-    );
-    const indexMappedEntries = useMemo<MessageJumpEntry[] | null>(() => {
-      if (!indexEntries) {
-        return null;
-      }
-      const seenIndex = new Set<string>();
-      const entries: MessageJumpEntry[] = [];
-      for (const entry of indexEntries) {
-        if (seenIndex.has(entry.id)) {
-          continue;
-        }
-        seenIndex.add(entry.id);
-        entries.push({
-          id: entry.id,
-          epoch: entry.epoch,
-          seq: entry.seq,
-          preview: entry.preview,
-          timestampLabel: entry.timestampLabel,
-          hasImages: tailImageFlags.get(entry.id) ?? false,
-        });
-      }
-      return entries;
-    }, [indexEntries, tailImageFlags]);
-    const messageJumpLabels = useMemo<LoadedMessageLabel>(
-      () => ({
-        imageMessage: t("agentStream.messageJump.imageMessage"),
-        attachmentMessage: t("agentStream.messageJump.attachmentMessage"),
-      }),
-      [t],
-    );
-    const tailFallbackEntries = useMemo(
-      () =>
-        buildLoadedFallbackJumpEntries(projectedToolCalls.tail, messageJumpLabels, formatTimeAgo),
-      [projectedToolCalls.tail, messageJumpLabels],
-    );
-    const messageJumpEntries = useMemo<MessageJumpEntry[]>(() => {
-      const head = projectedToolCalls.head ?? EMPTY_STREAM_HEAD;
-      const headFlags = loweredImageFlags(head);
-      if (indexMappedEntries) {
-        let patched = indexMappedEntries;
-        for (let index = 0; index < indexMappedEntries.length; index++) {
-          const entry = indexMappedEntries[index];
-          // Tail ids win on a tail/head id collision (head flags only fill gaps).
-          const headFlag = tailImageFlags.has(entry.id) ? undefined : headFlags.get(entry.id);
-          if (headFlag !== undefined && headFlag !== entry.hasImages) {
-            if (patched === indexMappedEntries) {
-              patched = indexMappedEntries.slice();
-            }
-            patched[index] = { ...entry, hasImages: headFlag };
-          }
-        }
-        return patched;
-      }
-      if (headFlags.size === 0) {
-        return tailFallbackEntries;
-      }
-      const tailIds = new Set(tailFallbackEntries.map((entry) => entry.id));
-      return [
-        ...tailFallbackEntries,
-        ...buildLoadedFallbackJumpEntries(head, messageJumpLabels, formatTimeAgo).filter(
-          (entry) => !tailIds.has(entry.id),
-        ),
-      ];
-    }, [
-      indexMappedEntries,
-      tailFallbackEntries,
-      tailImageFlags,
-      projectedToolCalls.head,
-      messageJumpLabels,
-    ]);
-
-    const renderedStreamItems = useMemo(
-      () => [
-        ...streamLayout.history.map((layoutItem) => layoutItem.item),
-        ...streamLayout.liveHead.map((layoutItem) => layoutItem.item),
-      ],
-      [streamLayout.history, streamLayout.liveHead],
     );
     // Fetch feedback for a jump that needs timeline backfill: a pinned notice
     // while pages stream in, plus an error + retry when the daemon cannot cover
