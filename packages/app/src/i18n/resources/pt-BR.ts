@@ -1633,6 +1633,7 @@ export const ptBR: TranslationResources = {
       noPreview: "Nenhuma prévia disponível",
       binaryPreviewUnavailable: "Prévia binária indisponível",
       truncatedPreview: "Prévia truncada — arquivo completo tem {{size}}",
+      loadFull: "Carregar completo",
       failedToLoad: "Falha ao carregar arquivo",
       failedToLoadPreview: "Falha ao carregar prévia do arquivo",
       editor: {

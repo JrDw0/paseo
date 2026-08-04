@@ -28,6 +28,7 @@ import { createPreviewAttachmentId, getFileNameFromPath } from "@/attachments/ut
 import { explorerFileFromReadResult } from "@/file-explorer/read-result";
 import { resolveFilePreviewReadTarget } from "@/file-explorer/preview-target";
 import type { WorkspaceFileLocation } from "@/workspace/file-open";
+import { useFileDownload } from "@/hooks/use-file-download";
 import { useRetainedPanelActive } from "@/components/retained-panel";
 import { useAppActivelyVisible } from "@/hooks/use-app-visible";
 import { isFileQueryEnabled } from "@/components/file-pane-enabled";
@@ -65,6 +66,8 @@ interface FilePreviewBodyProps {
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  onLoadFull?: () => void;
+  onDownload?: () => void;
 }
 
 type TextExplorerFile = ExplorerFile & { kind: "text" };
@@ -209,13 +212,35 @@ const codeLineStyles = StyleSheet.create((theme) => ({
   },
 }));
 
-function TruncatedPreviewBanner({ sizeBytes }: { sizeBytes: number }) {
+function TruncatedPreviewBanner({
+  sizeBytes,
+  onLoadFull,
+  onDownload,
+}: {
+  sizeBytes: number;
+  onLoadFull?: () => void;
+  onDownload?: () => void;
+}) {
   const { t } = useTranslation();
   return (
     <View style={styles.truncatedBanner} testID="file-truncated-banner">
       <Text style={styles.truncatedBannerText}>
         {t("panels.file.truncatedPreview", { size: formatFileSize({ size: sizeBytes }) })}
       </Text>
+      {onLoadFull || onDownload ? (
+        <View style={styles.truncatedBannerActions}>
+          {onLoadFull ? (
+            <Button variant="ghost" size="sm" onPress={onLoadFull}>
+              {t("panels.file.loadFull")}
+            </Button>
+          ) : null}
+          {onDownload ? (
+            <Button variant="ghost" size="sm" onPress={onDownload}>
+              {t("panels.fileActions.download")}
+            </Button>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -228,6 +253,8 @@ function FilePreviewBody({
   location,
   navigationRevision,
   imagePreviewUri,
+  onLoadFull,
+  onDownload,
 }: FilePreviewBodyProps) {
   const theme = UnistylesRuntime.getTheme();
   const { t } = useTranslation();
@@ -301,7 +328,11 @@ function FilePreviewBody({
   }
 
   const truncatedBanner = preview.truncated ? (
-    <TruncatedPreviewBanner sizeBytes={preview.size} />
+    <TruncatedPreviewBanner
+      sizeBytes={preview.size}
+      onLoadFull={onLoadFull}
+      onDownload={onDownload}
+    />
   ) : null;
 
   if (preview.kind === "text") {
@@ -502,6 +533,28 @@ export function FilePane({
     preview?.kind === "text" ? (preview.content ?? "").split("\n").length : undefined;
   const errorMessage = getFileErrorMessage(liveFile.error, t("panels.file.failedToLoad"));
 
+  const downloadFile = useFileDownload({ serverId, workspaceRoot });
+  const loadFull = useCallback(async () => {
+    if (!client || !readTarget) return;
+    try {
+      // Load the whole file, bypassing the preview cap, so a user can read past
+      // a truncated preview. (Inherently heavy for very large files — opt-in.)
+      const file = await client.readFile(readTarget.cwd, readTarget.path);
+      const key = `${readTarget.cwd}:${readTarget.path}`;
+      const nextPreview = await createFilePanePreview(file);
+      setResolvedPreview({ key, ...nextPreview });
+    } catch {
+      // Best-effort; the truncated preview stays in place on failure.
+    }
+  }, [client, readTarget]);
+  const download = useCallback(() => {
+    if (!readTarget) return;
+    downloadFile({
+      fileName: getFileNameFromPath(readTarget.path) ?? readTarget.path,
+      path: readTarget.path,
+    });
+  }, [downloadFile, readTarget]);
+
   return (
     <FilePanePresentation
       serverId={serverId}
@@ -524,6 +577,8 @@ export function FilePane({
       location={location}
       navigationRevision={navigationRevision}
       imagePreviewUri={imagePreviewUri}
+      onLoadFull={loadFull}
+      onDownload={download}
     />
   );
 }
@@ -571,6 +626,8 @@ function FilePanePresentation({
   location,
   navigationRevision,
   imagePreviewUri,
+  onLoadFull,
+  onDownload,
 }: {
   serverId: string;
   client: DaemonClient | null;
@@ -592,6 +649,8 @@ function FilePanePresentation({
   location: WorkspaceFileLocation;
   navigationRevision: number;
   imagePreviewUri: string | null;
+  onLoadFull?: () => void;
+  onDownload?: () => void;
 }) {
   if (!client && readTarget) {
     return (
@@ -656,6 +715,8 @@ function FilePanePresentation({
         location={location}
         navigationRevision={navigationRevision}
         imagePreviewUri={imagePreviewUri}
+        onLoadFull={onLoadFull}
+        onDownload={onDownload}
       />
     </View>
   );
@@ -887,6 +948,11 @@ const styles = StyleSheet.create((theme) => ({
     marginTop: theme.spacing[2],
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
+  },
+  truncatedBannerActions: {
+    flexDirection: "row",
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[2],
   },
   previewScrollContainer: {
     flex: 1,
