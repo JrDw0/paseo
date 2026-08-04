@@ -366,4 +366,45 @@ describe("subscription triggers", () => {
 
     expect(setItem).not.toHaveBeenCalled();
   });
+
+  it("re-persists across a focus round-trip through null (baseline resets)", async () => {
+    const storage = new MemoryStorage();
+    await startPrimedCache(storage);
+    seedSecondAgent();
+    const setItem = vi.spyOn(storage, "setItem");
+    vi.useFakeTimers();
+
+    useSessionStore.getState().setFocusedAgentId(SERVER_ID, "agent-2");
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    setItem.mockClear();
+    // User backs out to null, then re-selects agent-2. The effective focus id
+    // never changes (lastFocused fallback), so only the raw-focus guard catches
+    // the boundary and persists the (reset) baseline.
+    useSessionStore.getState().setFocusedAgentId(SERVER_ID, null);
+    await vi.advanceTimersByTimeAsync(2_000);
+    useSessionStore.getState().setFocusedAgentId(SERVER_ID, "agent-2");
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(setItem).toHaveBeenCalled();
+    expect(persistedFocusedAgentId(storage)).toBe("agent-2");
+  });
+
+  it("persists when focus moves from null to an agent with no prior lastFocused", async () => {
+    const storage = new MemoryStorage();
+    const cache = new ReplicaCache(storage);
+    cache.setHosts([SERVER_ID]);
+    seedSession();
+    useSessionStore.getState().setFocusedAgentId(SERVER_ID, null);
+    await cache.flush();
+    cache.start();
+    const setItem = vi.spyOn(storage, "setItem");
+    vi.useFakeTimers();
+
+    useSessionStore.getState().setFocusedAgentId(SERVER_ID, "agent-1");
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(setItem).toHaveBeenCalled();
+    expect(persistedFocusedAgentId(storage)).toBe("agent-1");
+  });
 });

@@ -12,7 +12,11 @@ export type FileTransferOpcode = (typeof FileTransferOpcode)[keyof typeof FileTr
 export const FileBeginMetadataSchema = z.object({
   mime: z.string().min(1),
   size: z.number().int().nonnegative(),
-  encoding: z.enum(["utf-8", "binary"]),
+  // COMPAT(latin1-encoding): "latin1" added for non-UTF-8 text previews. A
+  // client older than this rejects the value at decode (safeParse drops the
+  // frame), so only new daemons emit it and only for text files whose bytes
+  // aren't valid UTF-8. Remove this note after client floor reaches it.
+  encoding: z.enum(["utf-8", "binary", "latin1"]),
   modifiedAt: z.string(),
   revision: z.string().optional(),
   fileName: z.string().optional(),

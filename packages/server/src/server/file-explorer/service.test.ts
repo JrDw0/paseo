@@ -343,7 +343,111 @@ describe("file explorer service", () => {
 
       expect(result.kind).toBe("text");
       expect(result.truncated).toBe(true);
+      // The cap sliced the lead byte of "中"; the preview must trim back to a
+      // complete character so decoding never yields U+FFFD.
+      expect(result.bytes.length).toBe(maxBytes - 1);
+      expect(new TextDecoder().decode(result.bytes)).not.toContain("�");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a non-UTF-8 latin1 text file as text instead of binary (full path)", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "latin1.log");
+      // Alternating ASCII + high latin1 bytes (0xe9): no nulls, no control
+      // bytes, but not valid UTF-8. The pre-fix whole-file `!isValidUtf8`
+      // check misclassified these as binary.
+      const content = Buffer.alloc(512);
+      for (let i = 0; i < content.length; i += 1) {
+        content[i] = i % 2 === 0 ? 0x61 : 0xe9;
+      }
+      await writeFile(filePath, content);
+
+      const result = await readExplorerFileBytes({ root, relativePath: "latin1.log" });
+
+      expect(result.kind).toBe("text");
+      expect(result.encoding).toBe("latin1");
+      expect(result.truncated).toBe(false);
+      expect(result.bytes.length).toBe(content.length);
+      // latin1 decode round-trips the exact bytes, not replacement chars.
+      expect(new TextDecoder("latin1").decode(result.bytes)).not.toContain("�");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("previews a >cap non-UTF-8 latin1 log as text, not binary", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "big-latin1.log");
+      const maxBytes = 64 * 1024;
+      const content = Buffer.alloc(maxBytes * 3);
+      for (let i = 0; i < content.length; i += 1) {
+        content[i] = i % 2 === 0 ? 0x61 : 0xe9;
+      }
+      await writeFile(filePath, content);
+
+      const result = await readExplorerFileBytes({
+        root,
+        relativePath: "big-latin1.log",
+        maxBytes,
+      });
+
+      expect(result.kind).toBe("text");
+      expect(result.truncated).toBe(true);
+      expect(result.encoding).toBe("latin1");
+      // latin1 has no multi-byte structure, so the full cap is served untrimmed.
       expect(result.bytes.length).toBe(maxBytes);
+      expect(new TextDecoder("latin1").decode(result.bytes)).not.toContain("�");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a >cap file with a null byte inside the served prefix as binary", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "huge-null.bin");
+      const maxBytes = 64 * 1024;
+      const content = Buffer.alloc(maxBytes * 3, 0x61);
+      content[1024] = 0x00;
+      await writeFile(filePath, content);
+
+      const result = await readExplorerFileBytes({ root, relativePath: "huge-null.bin", maxBytes });
+
+      expect(result.kind).toBe("binary");
+      expect(result.truncated).toBe(true);
+      expect(result.bytes.length).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the full maxBytes when a utf-8 preview ends on a character boundary", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "aligned.log");
+      // "é" is two bytes; build a file whose cap slices exactly on a boundary.
+      const maxBytes = 64 * 1024;
+      const content = Buffer.alloc(maxBytes * 2);
+      for (let i = 0; i < content.length; i += 2) {
+        content[i] = 0xc3;
+        content[i + 1] = 0xa9;
+      }
+      await writeFile(filePath, content);
+
+      const result = await readExplorerFileBytes({ root, relativePath: "aligned.log", maxBytes });
+
+      expect(result.kind).toBe("text");
+      expect(result.encoding).toBe("utf-8");
+      expect(result.bytes.length).toBe(maxBytes);
+      expect(new TextDecoder().decode(result.bytes)).not.toContain("�");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

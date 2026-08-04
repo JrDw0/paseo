@@ -1148,9 +1148,23 @@ function promoteCompletedAssistantBlocks(params: { tail: StreamItem[]; head: Str
 // 它的 id 集是安全的;WeakMap 让被 store 丢弃的旧 tail 的缓存随 GC 回收。
 const tailIdsCache = new WeakMap<StreamItem[], Set<string>>();
 
-function getTailIds(tail: StreamItem[]): Set<string> {
+// invariant: cached.size === tail.length. 缓存只对从不原地改的 tail 成立。若某处
+// 逃逸了 tail 引用做 push/splice(会改变数组长度),Set 与数组会失配 — 这是 bug,
+// 而不是 O(M) 问题。__DEV__ 下每拍命中时核对长度,失配即抛;生产路径(build 内联
+// __DEV__ = false)这个分支被编译掉,零成本。
+const IS_DEV = Boolean((globalThis as { __DEV__?: boolean }).__DEV__);
+
+export function getTailIds(tail: StreamItem[]): Set<string> {
   const cached = tailIdsCache.get(tail);
   if (cached) {
+    if (IS_DEV && cached.size !== tail.length) {
+      // 逃逸/原地改写已发生:先以当前数组重建缓存(自愈下一次访问),再抛,让
+      // dev/CI 立即爆炸而不是带着错 cache 继续跑。
+      tailIdsCache.set(tail, new Set(tail.map((item) => item.id)));
+      throw new Error(
+        "tailIdsCache: cache-tail invariant violated, ref escape / in-place mutation detected",
+      );
+    }
     return cached;
   }
   // 同一 tail 引用只付一次 O(M) 建集;streaming head 滚动期间 tail 引用不变,零成本。
