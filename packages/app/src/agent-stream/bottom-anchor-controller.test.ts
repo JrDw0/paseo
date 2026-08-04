@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   __private__,
   deriveBottomAnchorBlockedReason,
+  type BottomAnchorLocalRequest,
   type BottomAnchorMode,
 } from "./bottom-anchor-controller";
 import type { BottomAnchorTransportBehavior } from "./strategy";
@@ -430,6 +431,38 @@ describe("bottom anchor controller driver", () => {
     harness.scheduler.flushAll();
 
     expect(harness.driver.getSnapshot().mode).toBe("detached");
+    expect(harness.scrollAttempts).toHaveLength(0);
+  });
+
+  it("releases the anchor programmatically for a mid-stream jump even while a restick request is pending", () => {
+    const harness = createDriverHarness({ authoritativeReady: false });
+    const request: BottomAnchorLocalRequest = {
+      agentId: "agent-1",
+      reason: "jump-to-message",
+    };
+    harness.driver.requestLocalAnchor(request);
+    expect(harness.driver.getSnapshot().mode).toBe("sticky-bottom");
+    expect(harness.driver.getSnapshot().pendingRequest).not.toBeNull();
+
+    // A jump is explicit intent: unlike a scroll-away (which is suppressed
+    // while a restick request is pending) it cancels the request and detaches.
+    harness.driver.detachProgrammatically();
+
+    expect(harness.driver.getSnapshot().mode).toBe("detached");
+    expect(harness.driver.getSnapshot().pendingRequest).toBeNull();
+
+    // Streamed growth and layout changes no longer yank the viewport back down.
+    harness.driver.handleContentSizeChange({
+      previousContentHeight: 1200,
+      contentHeight: 1500,
+    });
+    harness.driver.handleViewportMetricsChange({
+      previousViewportWidth: 800,
+      viewportWidth: 640,
+      previousViewportHeight: 480,
+      viewportHeight: 420,
+    });
+    harness.scheduler.flushAll();
     expect(harness.scrollAttempts).toHaveLength(0);
   });
 

@@ -370,6 +370,11 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       messageId,
       index: plan.index,
     });
+    // A jump to a mid-stream row releases the bottom anchor programmatically:
+    // leaving it sticky lets the next streamed content change snap the viewport
+    // back to the bottom mid-gesture. Unlike a user scroll-away, this must apply
+    // even while the anchor is suppressed, so use detachProgrammatically.
+    bottomAnchorController.detachProgrammatically();
     flatListRef.current?.scrollToIndex({ index: plan.index, viewPosition: 0.5, animated });
   });
 
