@@ -56,18 +56,25 @@ describe("planJumpBackfill", () => {
 describe("driveJumpBackfill", () => {
   function harness(input: { startSeq: number; targetSeq: number; maxPages?: number }) {
     let startSeq = input.startSeq;
+    let windowCovers = false;
     const fetched: Array<{ seq: number; limit: number }> = [];
     let covered = 0;
     const fetchPage: Parameters<typeof driveJumpBackfill>[0]["fetchPage"] = async (request) => {
       fetched.push({ seq: request.cursor.seq, limit: request.limit });
+      if (windowCovers && request.cursor.seq === input.targetSeq + 1) {
+        // Window probe: the daemon returns the window ending at the target.
+        startSeq = input.targetSeq;
+        return;
+      }
       // Each continuous page pulls 3 rows, simulating the span widening.
       startSeq = Math.max(startSeq - 3, input.targetSeq);
     };
     return {
       fetched,
       covered: () => covered,
-      run: async (max?: number) =>
-        driveJumpBackfill({
+      run: async (max?: number, opts?: { windowCovers?: boolean }) => {
+        windowCovers = opts?.windowCovers === true;
+        return driveJumpBackfill({
           targetSeq: input.targetSeq,
           readStartSeq: () => startSeq,
           readEpoch: () => "epoch-1",
@@ -76,7 +83,8 @@ describe("driveJumpBackfill", () => {
             covered += 1;
           },
           maxPages: max ?? input.maxPages,
-        }),
+        });
+      },
     };
   }
 
@@ -89,13 +97,16 @@ describe("driveJumpBackfill", () => {
 
   test("fetches a target window when no local timeline cursor exists", async () => {
     let covered = 0;
+    let startSeq = Number.POSITIVE_INFINITY;
     const fetched: number[] = [];
     await driveJumpBackfill({
       targetSeq: 10,
-      readStartSeq: () => Number.POSITIVE_INFINITY,
+      readStartSeq: () => startSeq,
       readEpoch: () => "epoch-1",
       fetchPage: async (request) => {
         fetched.push(request.cursor.seq);
+        // The daemon window response establishes the span around the target.
+        startSeq = 10;
       },
       onCovered: () => {
         covered += 1;
@@ -103,6 +114,22 @@ describe("driveJumpBackfill", () => {
     });
     expect(fetched).toEqual([11]);
     expect(covered).toBe(1);
+  });
+
+  test("rejects when a page lands but the span still does not cover the target", async () => {
+    let covered = 0;
+    await expect(
+      driveJumpBackfill({
+        targetSeq: 10,
+        readStartSeq: () => Number.POSITIVE_INFINITY,
+        readEpoch: () => "epoch-1",
+        fetchPage: async () => undefined,
+        onCovered: () => {
+          covered += 1;
+        },
+      }),
+    ).rejects.toThrow("Timeline backfill did not cover the target");
+    expect(covered).toBe(0);
   });
 
   test("pages continuously until the span covers the target", async () => {
@@ -115,7 +142,7 @@ describe("driveJumpBackfill", () => {
 
   test("trips to a capped window when maxPages continuous pages are exhausted", async () => {
     const h = harness({ startSeq: 40, targetSeq: 1, maxPages: 1 });
-    await h.run(1);
+    await h.run(1, { windowCovers: true });
     // After the first continue page the span narrows slowly; the extra capped
     // page keys on targetSeq+1.
     const windowFetch = h.fetched.find((f) => f.seq === 2);
