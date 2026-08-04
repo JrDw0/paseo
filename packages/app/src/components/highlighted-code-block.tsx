@@ -49,6 +49,10 @@ function stripTerminalFenceNewline(code: string): string {
   return code.endsWith("\n") ? code.slice(0, -1) : code;
 }
 
+// Longer than the 48ms stream flush cadence, short enough to feel instant once
+// output pauses.
+const HIGHLIGHT_SETTLE_DELAY_MS = 250;
+
 export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   code,
   language,
@@ -64,10 +68,28 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   );
   const renderedCode = useMemo(() => stripTerminalFenceNewline(code), [code]);
 
-  const keyedLines = useMemo<KeyedLine[] | null>(
-    () => highlightToKeyedLines(renderedCode, fenceLanguageToExtension(language)),
-    [renderedCode, language],
-  );
+  // Streaming a code fence re-renders this component every flush (~48ms) with a
+  // growing `code` string; highlighting parses the full text via Lezer each time
+  // (the cache key is the whole string). Defer highlighting until updates pause:
+  // while `code` keeps changing, render the current text plainly; once it settles
+  // for HIGHLIGHT_SETTLE_DELAY_MS (stream end or a model pause), one full highlight
+  // runs. Static/history blocks settle on mount, so they highlight immediately.
+  const [settledCode, setSettledCode] = useState(renderedCode);
+  useEffect(() => {
+    if (settledCode === renderedCode) {
+      return;
+    }
+    const timer = setTimeout(() => setSettledCode(renderedCode), HIGHLIGHT_SETTLE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [renderedCode, settledCode]);
+  const highlightPending = settledCode !== renderedCode;
+
+  const keyedLines = useMemo<KeyedLine[] | null>(() => {
+    if (highlightPending) {
+      return null;
+    }
+    return highlightToKeyedLines(renderedCode, fenceLanguageToExtension(language));
+  }, [renderedCode, language, highlightPending]);
 
   const isCompact = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);

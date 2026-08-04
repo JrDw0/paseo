@@ -483,6 +483,7 @@ interface SessionStoreActions {
     agentId: string,
     applied: boolean,
   ) => void;
+  applyTimelinePageUpdate: (serverId: string, update: TimelinePageUpdate) => void;
 
   // Initializing agents
   setInitializingAgents: (
@@ -643,6 +644,80 @@ function isSessionServerInfoUnchanged(input: {
     areServerCapabilitiesEqual(currentServerInfo?.capabilities, nextCapabilities) &&
     areServerInfoFeaturesEqual(currentServerInfo?.features, nextFeatures)
   );
+}
+
+/**
+ * One timeline page application touches tail/head/cursor/flags together. Each
+ * plain `set()` re-runs every `subscribeWithSelector` selector synchronously,
+ * so applying a page through the individual setters multiplies the sweep per
+ * fetched page (backfill/reconnect paging). `applyTimelinePageUpdate` folds the
+ * page into a single set() — one sweep — while keeping each field's
+ * return-same-reference-to-skip semantics from its dedicated setter.
+ */
+export interface TimelinePageUpdate {
+  hasOlder?: (prev: Map<string, boolean>) => Map<string, boolean>;
+  streamTail?: (prev: Map<string, StreamItem[]>) => Map<string, StreamItem[]>;
+  streamHead?: (prev: Map<string, StreamItem[]>) => Map<string, StreamItem[]>;
+  cursor?: (prev: Map<string, AgentTimelineCursorState>) => Map<string, AgentTimelineCursorState>;
+  initializing?: (prev: Map<string, boolean>) => Map<string, boolean>;
+  /** Set `agentAuthoritativeHistoryApplied[authoritativeAgentId]` to true. */
+  markAuthoritativeHistoryApplied?: string;
+  /** Set `agentHistorySyncGeneration[synchronizedAgentId]` to the current generation. */
+  markHistorySynchronized?: string;
+}
+
+type SessionTransition = (session: SessionState) => SessionState;
+
+function applySessionTransition(
+  prev: SessionStore,
+  serverId: string,
+  transition: SessionTransition,
+): SessionStore {
+  const session = prev.sessions[serverId];
+  if (!session) {
+    return prev;
+  }
+  const nextSession = transition(session);
+  if (nextSession === session) {
+    return prev;
+  }
+  return {
+    ...prev,
+    sessions: { ...prev.sessions, [serverId]: nextSession },
+  };
+}
+
+function transitionField<F extends keyof SessionState>(
+  field: F,
+  updater: (prev: SessionState[F]) => SessionState[F],
+): SessionTransition {
+  return (session) => {
+    const nextValue = updater(session[field]);
+    return nextValue === session[field] ? session : { ...session, [field]: nextValue };
+  };
+}
+
+function transitionMarkAuthoritativeHistoryApplied(agentId: string): SessionTransition {
+  return (session) => {
+    if ((session.agentAuthoritativeHistoryApplied.get(agentId) ?? false) === true) {
+      return session;
+    }
+    const nextApplied = new Map(session.agentAuthoritativeHistoryApplied);
+    nextApplied.set(agentId, true);
+    return { ...session, agentAuthoritativeHistoryApplied: nextApplied };
+  };
+}
+
+function transitionMarkHistorySynchronized(agentId: string): SessionTransition {
+  return (session) => {
+    const currentGeneration = session.historySyncGeneration;
+    if (session.agentHistorySyncGeneration.get(agentId) === currentGeneration) {
+      return session;
+    }
+    const nextMap = new Map(session.agentHistorySyncGeneration);
+    nextMap.set(agentId, currentGeneration);
+    return { ...session, agentHistorySyncGeneration: nextMap };
+  };
 }
 
 export const useSessionStore = create<SessionStore>()(
@@ -1262,6 +1337,38 @@ export const useSessionStore = create<SessionStore>()(
             },
           };
         });
+      },
+
+      applyTimelinePageUpdate: (serverId, update) => {
+        set((prev) =>
+          applySessionTransition(prev, serverId, (session) => {
+            let next = session;
+            if (update.hasOlder) {
+              next = transitionField("agentTimelineHasOlder", update.hasOlder)(next);
+            }
+            if (update.streamTail) {
+              next = transitionField("agentStreamTail", update.streamTail)(next);
+            }
+            if (update.streamHead) {
+              next = transitionField("agentStreamHead", update.streamHead)(next);
+            }
+            if (update.cursor) {
+              next = transitionField("agentTimelineCursor", update.cursor)(next);
+            }
+            if (update.initializing) {
+              next = transitionField("initializingAgents", update.initializing)(next);
+            }
+            if (update.markAuthoritativeHistoryApplied) {
+              next = transitionMarkAuthoritativeHistoryApplied(
+                update.markAuthoritativeHistoryApplied,
+              )(next);
+            }
+            if (update.markHistorySynchronized) {
+              next = transitionMarkHistorySynchronized(update.markHistorySynchronized)(next);
+            }
+            return next;
+          }),
+        );
       },
 
       // Initializing agents

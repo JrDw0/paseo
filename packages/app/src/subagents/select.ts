@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { usePendingArchiveAgentIds } from "@/hooks/use-archive-agent";
 import equal from "fast-deep-equal";
 import { useStoreWithEqualityFn } from "zustand/traditional";
@@ -121,6 +121,9 @@ export function selectProviderSubagentsForParent(
 }
 
 export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRow[] {
+  // Keyed by "kind:id" — reuse the previous row object when its fields are deep-equal,
+  // so memoized track rows can bail out when a sibling subagent's status changes.
+  const prevRowsRef = useRef<Map<string, SubagentRow>>(new Map());
   const pendingArchiveIds = usePendingArchiveAgentIds(params.serverId);
   const paseoRows = useStoreWithEqualityFn(
     useSessionStore,
@@ -145,9 +148,25 @@ export function useSubagentsForParent(params: SelectSubagentsParams): SubagentRo
   }, [client, params.parentAgentId, params.serverId, supported]);
 
   return useMemo(() => {
-    if (providerRows.length === 0) return paseoRows;
-    const rows = [...paseoRows, ...providerRows];
-    rows.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
-    return rows;
+    const rows =
+      providerRows.length === 0
+        ? paseoRows
+        : (() => {
+            const combined = [...paseoRows, ...providerRows];
+            combined.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+            return combined;
+          })();
+    const prevRows = prevRowsRef.current;
+    const nextRows: SubagentRow[] = [];
+    const nextCache = new Map<string, SubagentRow>();
+    for (const row of rows) {
+      const key = `${row.kind}:${row.id}`;
+      const prev = prevRows.get(key);
+      const stable = prev !== undefined && equal(prev, row) ? prev : row;
+      nextRows.push(stable);
+      nextCache.set(key, stable);
+    }
+    prevRowsRef.current = nextCache;
+    return nextRows;
   }, [paseoRows, providerRows]);
 }
