@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Animated, View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { projectIconRadius } from "@/components/project-icon-view";
+import { useIsCompactFormFactor } from "@/constants/layout";
 
 const PROJECT_ICON_SIZE = 16;
 
@@ -31,6 +32,11 @@ function SkeletonSection({
   sectionOpacity: number;
   sectionIdx: number;
 }) {
+  // Compact rows never render the DiffStat badge
+  // (shouldShowSidebarWorkspaceDiffStat returns false there), so the skeleton
+  // must not reserve its slot — skeleton and content share the same box
+  // (docs/design.md §11).
+  const isCompact = useIsCompactFormFactor();
   const sectionStyle = useMemo(
     () => [styles.section, { opacity: sectionOpacity }],
     [sectionOpacity],
@@ -48,7 +54,7 @@ function SkeletonSection({
           <View key={key} style={styles.row}>
             <SkeletonPulse pulse={pulse} style={styles.rowDot} />
             <SkeletonPulse pulse={pulse} style={styles.rowTitle} />
-            <SkeletonPulse pulse={pulse} style={styles.rowBadge} />
+            {!isCompact ? <SkeletonPulse pulse={pulse} style={styles.rowBadge} /> : null}
           </View>
         ))}
       </View>

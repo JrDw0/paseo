@@ -973,7 +973,15 @@ export const es: TranslationResources = {
     },
     filter: {
       placeholder: "Filtrar espacios de trabajo",
+      close: "Cerrar filtro",
       noResults: "Ningún espacio de trabajo coincide",
+    },
+    displayPrefs: {
+      groupBy: "Agrupar por",
+      project: "Proyecto",
+      status: "Estado",
+      filter: "Filtro",
+      allHosts: "Todos los hosts",
     },
     pinned: {
       title: "Anclados",

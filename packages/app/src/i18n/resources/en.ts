@@ -952,7 +952,15 @@ export const en = {
     },
     filter: {
       placeholder: "Filter workspaces",
+      close: "Close filter",
       noResults: "No workspaces match",
+    },
+    displayPrefs: {
+      groupBy: "Group by",
+      project: "Project",
+      status: "Status",
+      filter: "Filter",
+      allHosts: "All hosts",
     },
     pinned: {
       title: "Pinned",

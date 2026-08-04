@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useRouter, type Href } from "expo-router";
-import { Clock, Download } from "lucide-react-native";
+import { Clock } from "lucide-react-native";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useHostChooser } from "@/hosts/host-chooser";
 import { useOpenProject } from "@/hooks/use-open-project";
@@ -13,7 +13,6 @@ import { buildHostAgentDetailRoute } from "@/utils/host-routes";
 import type { Theme } from "@/styles/theme";
 
 const ThemedClock = withUnistyles(Clock);
-const ThemedDownload = withUnistyles(Download);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 
@@ -162,7 +161,7 @@ export function MobileSidebarImportButton({ onBeforeNavigate }: { onBeforeNaviga
         style={buttonStyle}
         testID="sidebar-import-recent-sessions"
       >
-        <ThemedDownload size={20} uniProps={foregroundColorMapping} />
+        <ThemedClock size={20} uniProps={mutedColorMapping} />
       </Pressable>
       {sheetElement}
     </>

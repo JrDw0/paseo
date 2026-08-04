@@ -942,7 +942,15 @@ export const ar: TranslationResources = {
     },
     filter: {
       placeholder: "تصفية مساحات العمل",
+      close: "إغلاق الفلتر",
       noResults: "لا توجد مساحات عمل مطابقة",
+    },
+    displayPrefs: {
+      groupBy: "تجميع حسب",
+      project: "مشروع",
+      status: "الحالة",
+      filter: "تصفية",
+      allHosts: "كل المضيفين",
     },
     pinned: {
       title: "المثبتة",

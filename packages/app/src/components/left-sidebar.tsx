@@ -8,10 +8,12 @@ import {
   Search,
   Server,
   Settings,
+  X,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
+  Keyboard,
   Pressable,
   StyleSheet as RNStyleSheet,
   Text,
@@ -112,7 +114,8 @@ interface SidebarLabels {
   hosts: string;
   home: string;
   settings: string;
-  searchHosts: string;
+  filterWorkspaces: string;
+  closeFilter: string;
   sessions: string;
   schedules: string;
   importSession: string;
@@ -127,8 +130,6 @@ interface MobileSidebarProps extends SidebarSharedProps {
   insetsTop: number;
   insetsBottom: number;
   closeSidebar: () => void;
-  handleViewMoreNavigate: () => void;
-  handleViewSchedulesNavigate: () => void;
   filterText: string;
   setFilterText: (text: string) => void;
 }
@@ -243,7 +244,8 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
       hosts: t("sidebar.actions.hosts"),
       home: t("sidebar.actions.home"),
       settings: t("sidebar.actions.settings"),
-      searchHosts: t("sidebar.host.searchPlaceholder"),
+      filterWorkspaces: t("sidebar.filter.placeholder"),
+      closeFilter: t("sidebar.filter.close"),
       sessions: t("sidebar.sections.sessions"),
       schedules: t("sidebar.sections.schedules"),
       importSession: t("sidebar.actions.importRecentSessions"),
@@ -288,8 +290,6 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
             handleSettings={handleSettingsMobile}
             handleAddHost={handleAddHostMobile}
             handleOpenHostSettings={handleOpenHostSettingsMobile}
-            handleViewMoreNavigate={handleViewMoreNavigate}
-            handleViewSchedulesNavigate={handleViewSchedulesNavigate}
             filterText={filterText}
             setFilterText={setFilterText}
           />
@@ -589,7 +589,7 @@ function SidebarFooter({
     hosts: string;
     home: string;
     settings: string;
-    searchHosts: string;
+    filterWorkspaces: string;
   };
   handleAddHost: () => void;
   handleOpenHostSettings: (serverId: string) => void;
@@ -661,37 +661,40 @@ function MobileSidebar({
   insetsTop,
   insetsBottom,
   closeSidebar,
-  handleViewMoreNavigate,
-  handleViewSchedulesNavigate,
   filterText,
   setFilterText,
 }: MobileSidebarProps) {
-  const pathname = usePathname();
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
-  const isSessionsActive = pathname.includes("/sessions");
-  const isSchedulesActive = pathname.includes("/schedules");
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
   const dragGestureHostPresented = useIsMobilePanelPresented("agent-list");
   const [isFilterInputVisible, setIsFilterInputVisible] = useState(false);
 
-  const handleViewMore = useCallback(() => {
-    closeSidebar();
-    handleViewMoreNavigate();
-  }, [closeSidebar, handleViewMoreNavigate]);
-
-  const handleViewSchedules = useCallback(() => {
-    closeSidebar();
-    handleViewSchedulesNavigate();
-  }, [closeSidebar, handleViewSchedulesNavigate]);
+  const handleCloseFilterInput = useCallback(() => {
+    setFilterText("");
+    setIsFilterInputVisible(false);
+    Keyboard.dismiss();
+  }, [setFilterText]);
 
   const handleToggleFilterInput = useCallback(() => {
     setIsFilterInputVisible((current) => {
       if (current) {
         setFilterText("");
+        Keyboard.dismiss();
       }
       return !current;
     });
   }, [setFilterText]);
+
+  // Opening the FAB menu while the filter is focused leaves the keyboard
+  // covering both overlays. Close the search state first.
+  const handleFabMenuOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        handleCloseFilterInput();
+      }
+    },
+    [handleCloseFilterInput],
+  );
 
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
@@ -731,6 +734,10 @@ function MobileSidebar({
     () => <Plus size={14} color={theme.colors.foregroundMuted} />,
     [theme.colors.foregroundMuted],
   );
+  const fabFolderPlusSmallIcon = useMemo(
+    () => <FolderPlus size={14} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted],
+  );
   const fabMainPlusIcon = useMemo(
     () => <Plus size={theme.iconSize.lg} color={theme.colors.accentForeground} />,
     [theme.colors.accentForeground, theme.iconSize.lg],
@@ -756,29 +763,29 @@ function MobileSidebar({
       <View style={styles.sidebarContent} pointerEvents="auto">
         <WindowChromeSafeArea placement="below" />
 
-        {/* Top nav row: circular icon buttons (settings/home) + filter toggle */}
+        {/* Single chrome row: session management left, the filter toggle right. */}
         <View style={styles.mobileTopNavRow}>
           <MobileNavIconButton
             icon={Settings}
             label={labels.settings}
             onPress={handleSettingsPress}
-            size={48}
+            size={40}
             testID="sidebar-mobile-settings"
           />
           <MobileNavIconButton
             icon={Home}
             label={labels.home}
             onPress={handleHomePress}
-            size={48}
+            size={40}
             testID="sidebar-mobile-home"
           />
           <View style={styles.mobileTopNavSpacer} />
           <MobileNavIconButton
             icon={Search}
-            label={labels.searchHosts}
+            label={labels.filterWorkspaces}
             onPress={handleToggleFilterInput}
             active={showFilterInput}
-            size={48}
+            size={40}
             testID="sidebar-mobile-filter-toggle"
           />
         </View>
@@ -790,30 +797,15 @@ function MobileSidebar({
               setFilterText={setFilterText}
               theme={theme}
             />
+            <MobileNavIconButton
+              icon={X}
+              label={labels.closeFilter}
+              onPress={handleCloseFilterInput}
+              size={40}
+              testID="sidebar-mobile-filter-close"
+            />
           </View>
         ) : null}
-
-        {/* Secondary shortcuts: history / schedules as circular icon buttons + prefs */}
-        <View style={styles.mobileSecondaryRow}>
-          <MobileNavIconButton
-            icon={History}
-            label={labels.sessions}
-            onPress={handleViewMore}
-            active={isSessionsActive}
-            size={44}
-            testID="sidebar-sessions"
-          />
-          <MobileNavIconButton
-            icon={CalendarClock}
-            label={labels.schedules}
-            onPress={handleViewSchedules}
-            active={isSchedulesActive}
-            size={44}
-            testID="sidebar-schedules"
-          />
-          <View style={styles.mobileTopNavSpacer} />
-          <SidebarDisplayPreferencesMenu circular />
-        </View>
 
         {isInitialLoad && !hasActiveHostFilter ? (
           <SidebarAgentListSkeleton />
@@ -840,7 +832,7 @@ function MobileSidebar({
         {/* Footer: circular thumb-reach actions — import on the left, new-workspace/add-project FAB menu on the right */}
         <View style={styles.mobileFooter}>
           <MobileSidebarImportButton onBeforeNavigate={closeSidebar} />
-          <DropdownMenu>
+          <DropdownMenu onOpenChange={handleFabMenuOpenChange}>
             <DropdownMenuTrigger
               style={fabTriggerStyle}
               accessibilityRole="button"
@@ -853,7 +845,7 @@ function MobileSidebar({
               <DropdownMenuItem leading={fabPlusSmallIcon} onSelect={handleNewWorkspace}>
                 {labels.newWorkspace}
               </DropdownMenuItem>
-              <DropdownMenuItem leading={fabPlusSmallIcon} onSelect={handleAddProjectPress}>
+              <DropdownMenuItem leading={fabFolderPlusSmallIcon} onSelect={handleAddProjectPress}>
                 {labels.addProject}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -1125,9 +1117,21 @@ function WorkspacesSectionHeader() {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isCompactLayout = useIsCompactFormFactor();
+  const pathname = usePathname();
+  const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  const isSessionsActive = pathname.includes("/sessions");
+  const isSchedulesActive = pathname.includes("/schedules");
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
   const commandCenterKeys = useShortcutKeys("toggle-command-center");
   const handleSearchPress = useCallback(() => setCommandCenterOpen(true), [setCommandCenterOpen]);
+  const handleSessionsPress = useCallback(() => {
+    showMobileAgent();
+    router.push(buildSessionsRoute());
+  }, [showMobileAgent]);
+  const handleSchedulesPress = useCallback(() => {
+    showMobileAgent();
+    router.push(buildSchedulesRoute());
+  }, [showMobileAgent]);
   const searchButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.workspacesHeaderIconButton,
@@ -1136,13 +1140,31 @@ function WorkspacesSectionHeader() {
     [],
   );
 
-  // On compact the workspace list header is a plain label. Search/filter,
-  // import-recent, and display preferences moved into the sidebar's top nav
-  // and secondary rows so the header stays single-line.
+  // On compact the drawers demote history/schedules/display-preferences into the
+  // list header's trailing slot so the top chrome stays a single row (mirrors the
+  // desktop actions below). The header reads stores and routes itself so the
+  // stable listHeaderComponent element keeps identity.
   if (isCompactLayout) {
     return (
       <View style={styles.workspacesSectionHeader}>
         <Text style={styles.workspacesSectionTitle}>{t("sidebar.sections.workspaces")}</Text>
+        <View style={styles.workspacesSectionActions}>
+          <SectionHeaderNavButton
+            icon={History}
+            label={t("sidebar.sections.sessions")}
+            onPress={handleSessionsPress}
+            active={isSessionsActive}
+            testID="sidebar-sessions"
+          />
+          <SectionHeaderNavButton
+            icon={CalendarClock}
+            label={t("sidebar.sections.schedules")}
+            onPress={handleSchedulesPress}
+            active={isSchedulesActive}
+            testID="sidebar-schedules"
+          />
+          <SidebarDisplayPreferencesMenu />
+        </View>
       </View>
     );
   }
@@ -1182,11 +1204,56 @@ function WorkspacesSectionHeader() {
             </View>
           </TooltipTrigger>
           <TooltipContent side="bottom" align="center" offset={8}>
-            <IconTooltipContent label="Display preferences" />
+            <IconTooltipContent label={t("sidebar.actions.displayPreferences")} />
           </TooltipContent>
         </Tooltip>
       </View>
     </View>
+  );
+}
+
+// Demoted-chrome nav button for the compact workspaces header: small, muted,
+// accent icon when its destination is the active route.
+function SectionHeaderNavButton({
+  icon: Icon,
+  label,
+  onPress,
+  active,
+  testID,
+}: {
+  icon: typeof History;
+  label: string;
+  onPress: () => void;
+  active: boolean;
+  testID: string;
+}) {
+  const { theme } = useUnistyles();
+  const buttonStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.workspacesHeaderIconButton,
+      (hovered || pressed) && styles.workspacesHeaderIconButtonHovered,
+    ],
+    [],
+  );
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={8}
+      onPress={onPress}
+      style={buttonStyle}
+      testID={testID}
+    >
+      {({ hovered, pressed }) => {
+        let color = theme.colors.foregroundMuted;
+        if (active) {
+          color = theme.colors.accent;
+        } else if (hovered || pressed) {
+          color = theme.colors.foreground;
+        }
+        return <Icon size={14} color={color} />;
+      }}
+    </Pressable>
   );
 }
 
@@ -1330,22 +1397,20 @@ const styles = StyleSheet.create((theme) => ({
   mobileTopNavRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[3],
-    paddingHorizontal: theme.spacing[4],
-    paddingVertical: theme.spacing[2],
-  },
-  mobileFilterRow: {
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
-  },
-  mobileSecondaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[2],
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
+  },
+  // Sits on the same 16px rail as the top nav row and the workspaces section
+  // header below it (docs/design.md §8 — off the rail reads as unconsidered).
+  mobileFilterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
   },
   mobileFooter: {
     flexDirection: "row",

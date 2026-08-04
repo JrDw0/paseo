@@ -953,7 +953,15 @@ export const ja: TranslationResources = {
     },
     filter: {
       placeholder: "ワークスペースを絞り込む",
+      close: "フィルターを閉じる",
       noResults: "一致するワークスペースがありません",
+    },
+    displayPrefs: {
+      groupBy: "グループ分け",
+      project: "プロジェクト",
+      status: "ステータス",
+      filter: "フィルター",
+      allHosts: "すべてのホスト",
     },
     pinned: {
       title: "固定済み",

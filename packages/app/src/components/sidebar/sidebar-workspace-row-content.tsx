@@ -25,6 +25,8 @@ import { useSidebarRowAgentMeta } from "@/components/sidebar/sidebar-workspace-l
 import { getProviderIcon } from "@/components/provider-icons";
 import { useTranslation } from "react-i18next";
 import { formatTimeAgoLocalized } from "@/utils/time";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import { isNative } from "@/constants/platform";
 
 // The scrim spans more than the kebab so the fade starts left of the diff stat. Solid from
 // SCRIM_SOLID_OFFSET rightward, which keeps the kebab itself off the gradient entirely.
@@ -158,13 +160,18 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
     workspace,
     agentTitle: agentMeta?.agentTitle ?? null,
   });
+  const isCompact = useIsCompactFormFactor();
+  // The row title is the scan target, so on touch/compact surfaces (where the
+  // hover never fires) it must rest at full opacity, not the desktop dimmed
+  // state. Hover still controls it on desktop. See docs/hover.md "Native fallback".
+  const fullOpacityTitle = isHovered || isNative || isCompact;
   const workspaceBranchTextStyle = useMemo(
     () => [
       styles.workspaceBranchText,
-      isHovered && styles.workspaceBranchTextHovered,
+      fullOpacityTitle && styles.workspaceBranchTextHovered,
       isCreating && styles.workspaceBranchTextCreating,
     ],
-    [isHovered, isCreating],
+    [fullOpacityTitle, isCreating],
   );
 
   return (

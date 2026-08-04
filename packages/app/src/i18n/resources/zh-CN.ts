@@ -934,7 +934,15 @@ export const zhCN: TranslationResources = {
     },
     filter: {
       placeholder: "筛选工作区",
+      close: "关闭筛选",
       noResults: "没有匹配的工作区",
+    },
+    displayPrefs: {
+      groupBy: "分组方式",
+      project: "Project",
+      status: "状态",
+      filter: "筛选",
+      allHosts: "所有 Host",
     },
     pinned: {
       title: "已置顶",

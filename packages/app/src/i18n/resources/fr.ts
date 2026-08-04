@@ -972,7 +972,15 @@ export const fr: TranslationResources = {
     },
     filter: {
       placeholder: "Filtrer les espaces de travail",
+      close: "Fermer le filtre",
       noResults: "Aucun espace de travail ne correspond",
+    },
+    displayPrefs: {
+      groupBy: "Grouper par",
+      project: "Projet",
+      status: "Statut",
+      filter: "Filtrer",
+      allHosts: "Tous les hôtes",
     },
     pinned: {
       title: "Épinglés",

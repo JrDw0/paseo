@@ -964,7 +964,15 @@ export const ptBR: TranslationResources = {
     },
     filter: {
       placeholder: "Filtrar espaços de trabalho",
+      close: "Fechar filtro",
       noResults: "Nenhum espaço de trabalho corresponde ao filtro",
+    },
+    displayPrefs: {
+      groupBy: "Agrupar por",
+      project: "Projeto",
+      status: "Estado",
+      filter: "Filtro",
+      allHosts: "Todos os hosts",
     },
     pinned: {
       title: "Fixados",

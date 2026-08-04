@@ -964,7 +964,15 @@ export const ru: TranslationResources = {
     },
     filter: {
       placeholder: "Фильтровать рабочие области",
+      close: "Закрыть фильтр",
       noResults: "Нет подходящих рабочих областей",
+    },
+    displayPrefs: {
+      groupBy: "Группировка",
+      project: "Проект",
+      status: "Статус",
+      filter: "Фильтр",
+      allHosts: "Все хосты",
     },
     pinned: {
       title: "Закреплённые",
