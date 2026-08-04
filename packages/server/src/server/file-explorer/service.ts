@@ -93,6 +93,9 @@ const TEXT_MIME_TYPES: Record<string, string> = {
 
 const DEFAULT_TEXT_MIME_TYPE = "text/plain";
 const FILE_TYPE_SAMPLE_BYTES = 8192;
+// Only files above this size get the pre-read sniff; reading anything smaller
+// whole is already fast, so the sniff would only double-read its first bytes.
+const BINARY_SNIFF_MIN_BYTES = 1024 * 1024;
 export const FILE_EXPLORER_STREAM_CHUNK_BYTES = 256 * 1024;
 export const MAX_EDITABLE_FILE_BYTES = 1024 * 1024;
 const READ_FILE_OPEN_FLAGS =
@@ -254,15 +257,25 @@ export async function readExplorerFileBytes({
       revision: fileRevision(stats),
     };
 
-    // Sniff the leading bytes before reading the whole file. A large binary
-    // (e.g. an .apk the user tapped by accident) must fail fast here — the
-    // eager readFile() + byte-by-byte scan below stalls the daemon for
-    // seconds, which freezes every client waiting on that daemon.
-    if (!(ext in IMAGE_MIME_TYPES) && stats.size > 0) {
+    // Sniff the leading bytes before reading a large file. A big binary (e.g.
+    // an .apk the user tapped by accident) must fail fast here — the eager
+    // readFile() + byte-by-byte scan below stalls the daemon for seconds,
+    // which freezes every client waiting on that daemon.
+    //
+    // The sniff only looks for null bytes: they are the one binary signal that
+    // stays unambiguous in a partial sample. The control-byte ratio in
+    // isLikelyBinary is calibrated for whole buffers, and sampling it would
+    // misclassify control-dense text headers (ANSI-colored logs) as binary.
+    // Everything else falls through to the full-buffer checks below, so
+    // classification stays identical to scanning the whole file up front.
+    //
+    // Files below BINARY_SNIFF_MIN_BYTES skip the sniff: readFile() on them is
+    // already fast, and sniffing would just read their first bytes twice.
+    if (!(ext in IMAGE_MIME_TYPES) && stats.size > BINARY_SNIFF_MIN_BYTES) {
       const sampleLength = Math.min(FILE_TYPE_SAMPLE_BYTES, Number(stats.size));
       const sample = Buffer.allocUnsafe(sampleLength);
       const { bytesRead } = await handle.read(sample, 0, sampleLength, 0);
-      if (bytesRead > 0 && isLikelyBinary(sample.subarray(0, bytesRead))) {
+      if (sample.subarray(0, bytesRead).includes(0)) {
         return {
           ...basePayload,
           kind: "binary",

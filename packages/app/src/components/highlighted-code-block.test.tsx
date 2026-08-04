@@ -167,6 +167,29 @@ describe("HighlightedCodeBlock streaming settle debounce", () => {
     expect(container.textContent).toContain("first second");
   });
 
+  it("highlights a wholesale replacement immediately without waiting for settle", () => {
+    renderBlock(root, "const x = 1;");
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(1);
+
+    // Not an extension of the previous code: the content is already complete
+    // (e.g. a diff placeholder resolving), so it must not flash plain for 250ms.
+    renderBlock(root, "let y = 2;");
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(2);
+    expect(highlightToKeyedLinesMock).toHaveBeenLastCalledWith("let y = 2;", "ts");
+
+    act(() => vi.advanceTimersByTime(SETTLE_MS));
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("highlights a shrinking replacement immediately", () => {
+    renderBlock(root, "abcdef");
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(1);
+
+    renderBlock(root, "abc");
+    expect(highlightToKeyedLinesMock).toHaveBeenCalledTimes(2);
+    expect(highlightToKeyedLinesMock).toHaveBeenLastCalledWith("abc", "ts");
+  });
+
   it("trims a single trailing newline from the fence end before settling", () => {
     renderBlock(root, "line1\n");
     expect(highlightToKeyedLinesMock).toHaveBeenCalledWith("line1", "ts");

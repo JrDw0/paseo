@@ -71,10 +71,14 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
   // Streaming a code fence re-renders this component every flush (~48ms) with a
   // growing `code` string; highlighting parses the full text via Lezer each time
   // (the cache key is the whole string). Defer highlighting until updates pause:
-  // while `code` keeps changing, render the current text plainly; once it settles
+  // while `code` keeps growing, render the current text plainly; once it settles
   // for HIGHLIGHT_SETTLE_DELAY_MS (stream end or a model pause), one full highlight
   // runs. Static/history blocks settle on mount, so they highlight immediately.
   const [settledCode, setSettledCode] = useState(renderedCode);
+  const previousRenderedRef = useRef(renderedCode);
+  useEffect(() => {
+    previousRenderedRef.current = renderedCode;
+  }, [renderedCode]);
   useEffect(() => {
     if (settledCode === renderedCode) {
       return;
@@ -82,7 +86,11 @@ export const HighlightedCodeBlock = React.memo(function HighlightedCodeBlock({
     const timer = setTimeout(() => setSettledCode(renderedCode), HIGHLIGHT_SETTLE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [renderedCode, settledCode]);
-  const highlightPending = settledCode !== renderedCode;
+  // Only streaming appends defer highlighting. A wholesale replacement (a diff
+  // placeholder resolving into real content, a shorter re-generated block) is
+  // already complete — highlight it now instead of flashing plain for 250ms.
+  const isAppendGrowth = renderedCode.startsWith(previousRenderedRef.current);
+  const highlightPending = settledCode !== renderedCode && isAppendGrowth;
 
   const keyedLines = useMemo<KeyedLine[] | null>(() => {
     if (highlightPending) {

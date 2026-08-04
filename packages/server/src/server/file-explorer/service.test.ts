@@ -198,15 +198,15 @@ describe("file explorer service", () => {
     }
   });
 
-  it("rejects a sampled binary file without reading its full contents", async () => {
+  it("rejects a large sampled binary file without reading its full contents", async () => {
     const root = await createTempDir("paseo-file-explorer-");
 
     try {
       const filePath = path.join(root, "payload.bin");
-      // Null byte inside the 8KB sniff window, well past it in total size:
-      // a regression that falls back to reading the whole file is observable
-      // through the returned bytes.
-      const content = Buffer.alloc(8192 * 4, 0x61);
+      // Null byte inside the 8KB sniff window, in a file above the sniff size
+      // gate: a regression that falls back to reading the whole file is
+      // observable through the returned bytes.
+      const content = Buffer.alloc(1024 * 1024 + 4096, 0x61);
       content[0] = 0x00;
       await writeFile(filePath, content);
 
@@ -214,6 +214,48 @@ describe("file explorer service", () => {
 
       expect(result.kind).toBe("binary");
       expect(result.bytes.length).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not misclassify a large text file with a control-dense header as binary", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "colored.log");
+      // The first 8KB is pure ESC bytes (0x1b — a control byte, as in an
+      // ANSI-colored log banner): 100% of the sniff window, far above the 30%
+      // binary ratio. The body is plain text, so the whole-file ratio is far
+      // below it and the file must preview as text.
+      const content = Buffer.alloc(1024 * 1024 + 8192, 0x61);
+      content.fill(0x1b, 0, 8192);
+      await writeFile(filePath, content);
+
+      const result = await readExplorerFile({ root, relativePath: "colored.log" });
+
+      expect(result.kind).toBe("text");
+      expect(result.content).toBe(content.toString("utf-8"));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("classifies a small binary below the sniff gate via the full-buffer path", async () => {
+    const root = await createTempDir("paseo-file-explorer-");
+
+    try {
+      const filePath = path.join(root, "small.bin");
+      // Below the sniff gate the sniff is skipped entirely, so binary bytes
+      // stay populated exactly as the pre-sniff behavior returned them.
+      const content = Buffer.alloc(8192 * 4, 0x61);
+      content[0] = 0x00;
+      await writeFile(filePath, content);
+
+      const result = await readExplorerFileBytes({ root, relativePath: "small.bin" });
+
+      expect(result.kind).toBe("binary");
+      expect(result.bytes.length).toBe(content.length);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
