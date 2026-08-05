@@ -1501,6 +1501,15 @@ function finalizeHeadItems(head: StreamItem[]): StreamItem[] {
     if (item.kind === "thought" && item.status !== "ready") {
       return markThoughtReady(item);
     }
+    if (item.kind === "assistant_message" && item.blockGroupId) {
+      return {
+        ...item,
+        id: createAssistantBlockId({
+          groupId: item.blockGroupId,
+          blockIndex: item.blockIndex ?? 0,
+        }),
+      };
+    }
     return item;
   });
 }
