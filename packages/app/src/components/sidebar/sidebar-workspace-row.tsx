@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState, type ReactNode, type Ref } from "react";
+import { memo, useCallback, useMemo, useState, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { View, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -293,8 +293,13 @@ function WorkspaceRowBody({
     <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
       {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
         const isDesktop = !isTouchPlatform;
-        const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
-        const workspaceRowStyle = getWorkspaceRowStyle({ isDragging, selected, isHovered, isCompact });
+const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
+        const workspaceRowStyle = getWorkspaceRowStyle({
+          isDragging,
+          selected,
+          isHovered,
+          isCompact,
+        });
         return (
           <View
             {...(draggable ? dragAttributes : {})}
@@ -329,6 +334,8 @@ function WorkspaceRowBody({
               // Touch-down must read on native where hover never fires, so the pressed state
               // gets a tint one shade deeper than hover (surface2). A style fn feeds the context
               // trigger's pressed state through — the trigger is the only place that knows it.
+              // Created inside a render-prop child, so memoizing the fn would not help.
+              // oxlint-disable-next-line jsx-no-new-function-as-prop
               style={(state) => [...workspaceRowStyle, state.pressed && styles.workspaceRowPressed]}
               highlightStyle={styles.workspaceRowHovered}
               onPressIn={draggable ? interaction.handlePressIn : undefined}
