@@ -43,6 +43,7 @@ const AGENT_DEFAULTS: Agent = {
   requiresAttention: false,
   attentionReason: null,
   attentionTimestamp: null,
+  activeTurn: null,
   archivedAt: null,
   parentAgentId: null,
   labels: {},

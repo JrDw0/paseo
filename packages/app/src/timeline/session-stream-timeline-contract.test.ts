@@ -144,8 +144,10 @@ const baseTimelineInput: ProcessTimelineResponseInput = {
   payload: {
     agentId: "agent-1",
     direction: "before",
+    projection: "projected",
     reset: false,
     epoch: "epoch-1",
+    window: { minSeq: 1, maxSeq: 0, nextSeq: 1 },
     startCursor: null,
     endCursor: null,
     entries: [],
@@ -159,6 +161,7 @@ const baseTimelineInput: ProcessTimelineResponseInput = {
   isInitializing: false,
   hasActiveInitDeferred: false,
   initRequestDirection: "tail",
+  sendingClientMessageIds: [],
 };
 
 // ---------------------------------------------------------------------------
