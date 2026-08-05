@@ -1,0 +1,21 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.paseoscrollview'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.paseoscrollview"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}
+
+dependencies {
+  // The expo version catalog pins react-android to the app's RN version; omit the
+  // version here so both the host app and this module share the same ReactSurface.
+  implementation("com.facebook.react:react-android")
+}
