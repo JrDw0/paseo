@@ -347,4 +347,7 @@ process.on("message", (message: TerminalWorkerRequest) => {
 process.once("disconnect", () => {
   ipcClosing = true;
   manager.killAll();
+  // 父进程断开后 worker 没有存在的意义了。不 exit 的话 process.channel
+  // 仍保持半开状态，事件循环不会退出，worker 变成孤儿进程空转 100% CPU。
+  process.exit(0);
 });
