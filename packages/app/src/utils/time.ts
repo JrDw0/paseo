@@ -73,7 +73,10 @@ export function formatTimeAgoLocalized(
   return formatShortMonthDay(date, locale);
 }
 
-function timeAgoDiffs(date: Date, now: Date): {
+function timeAgoDiffs(
+  date: Date,
+  now: Date,
+): {
   diffSec: number;
   diffMin: number;
   diffHour: number;

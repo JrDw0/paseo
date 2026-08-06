@@ -38,12 +38,7 @@ export function useSidebarDisplayPreferences(): SidebarDisplayPreferences {
   const clearHostFilters = useSidebarViewStore((state) => state.clearHostFilters);
 
   const {
-settings: {
-      workspaceTitleSource,
-      sidebarWorkspaceTrailing,
-      sidebarRowItems,
-      sidebarChecksDisplay,
-    },
+    settings: { sidebarWorkspaceTrailing, sidebarRowItems, sidebarChecksDisplay },
     updateSettings,
   } = useAppSettings();
 

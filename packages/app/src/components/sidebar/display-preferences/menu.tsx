@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
-Bot,
   Captions,
   CircleCheck,
   CircleDashed,
@@ -15,8 +14,6 @@ Bot,
   Globe,
   Server,
   Settings2,
-  Type,
-  SquareTerminal,
 } from "lucide-react-native";
 import {
   MenuItem,
@@ -32,7 +29,6 @@ import { isWeb } from "@/constants/platform";
 import { useHosts } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
 import type { SidebarGroupMode } from "@/stores/sidebar-view-store";
-import type { WorkspaceTitleSource } from "@/hooks/use-settings";
 import { SIDEBAR_CHECKS_DISPLAYS, type SidebarChecksDisplay } from "./checks-display";
 import { useSidebarDisplayPreferences, type SidebarTrailingChoice } from "./model";
 import { SIDEBAR_ROW_ITEMS, type SidebarRowItem } from "./row-items";

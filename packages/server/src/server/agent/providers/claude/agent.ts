@@ -3480,7 +3480,7 @@ class ClaudeAgentSession implements AgentSession {
         `Claude stopped unexpectedly (${signal ? `signal ${signal}` : `exit code ${code ?? "unknown"}`}). Any background shells, monitors or other work it had running were terminated with it.`,
       ),
     ]);
-      }
+  }
   private logQueryPumpFailure(error: unknown): void {
     this.logger.warn(
       {

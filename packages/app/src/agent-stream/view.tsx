@@ -679,7 +679,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       onJumpError: handleTimelineHistoryLoadError,
     });
 
-
     useImperativeHandle(
       ref,
       () => ({

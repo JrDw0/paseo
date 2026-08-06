@@ -293,7 +293,7 @@ function WorkspaceRowBody({
     <SidebarWorkspaceRowFrame workspace={workspace} isDragging={isDragging}>
       {({ isHovered, contextMenuOpen, onContextMenuOpenChange, hoverHandlers }) => {
         const isDesktop = !isTouchPlatform;
-const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
+        const serviceSummary = isDesktop ? selectWorkspaceServiceSummary(workspace.scripts) : null;
         const workspaceRowStyle = getWorkspaceRowStyle({
           isDragging,
           selected,
