@@ -25,7 +25,6 @@ import { resolveSidebarWorkspacePrimaryLabel } from "@/components/sidebar/sideba
 import { useSidebarRowAgentMeta } from "@/components/sidebar/sidebar-workspace-list-context";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useTranslation } from "react-i18next";
-import { formatTimeAgoLocalized } from "@/utils/time";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative } from "@/constants/platform";
 
@@ -207,7 +206,6 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
             </View>
             <View style={[sidebarWorkspaceRowStyles.rowRight, styles.workspaceTitleRowRight]}>
               <WorkspaceWorktreeBranchBadge workspace={workspace} />
-              <WorkspaceAgentActivity meta={agentMeta} />
               {children}
             </View>
           </View>
@@ -239,18 +237,6 @@ function WorkspaceProviderIcon({
   }
   const Icon = getProviderIcon(meta.provider);
   return <Icon size={compact ? 16 : 12} color={styles.workspaceProviderIcon.color} />;
-}
-
-function WorkspaceAgentActivity({ meta }: { meta: ReturnType<typeof useSidebarRowAgentMeta> }) {
-  const { t, i18n } = useTranslation();
-  if (!meta) {
-    return null;
-  }
-  return (
-    <Text style={styles.workspaceAgentActivity} numberOfLines={1}>
-      {formatTimeAgoLocalized(meta.lastActivityAt, new Date(), t, i18n.language)}
-    </Text>
-  );
 }
 
 function WorkspaceWorktreeBranchBadge({ workspace }: { workspace: SidebarWorkspaceEntry }) {
@@ -672,12 +658,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   workspaceProviderIcon: {
     color: theme.colors.foregroundMuted,
-  },
-  workspaceAgentActivity: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    lineHeight: 20,
-    flexShrink: 0,
   },
   workspaceBranchBadge: {
     flexDirection: "row",
