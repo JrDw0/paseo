@@ -4,6 +4,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
 import { CircleAlert, Folder, FolderGit2, Monitor } from "lucide-react-native";
 import { ProjectStatusIndicator } from "@/components/sidebar/project-leading-visual";
+import { PulsingStatusDot } from "@/components/sidebar/pulsing-status-dot";
 import type { SurfaceBackdrop } from "@/styles/surface-backdrop";
 import {
   WorkspaceMetaRow,
@@ -42,7 +43,6 @@ const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.for
 const needsInputColorMapping = (theme: Theme) => ({
   color: getStatusDotColor({ theme, bucket: "needs_input" }) ?? undefined,
 });
-const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
 const blueColorMapping = (theme: Theme) => ({ color: theme.colors.palette.blue[500] });
 
 const ThemedCircleAlert = withUnistyles(CircleAlert);

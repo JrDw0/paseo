@@ -191,6 +191,17 @@ export const ko: TranslationResources = {
     empty: "이 에이전트와 대화를 시작하세요...",
     scrollToBottom: "맨 아래로 스크롤",
     historyLoadFailed: "에이전트 기록을 로드할 수 없습니다.",
+    refresh: "대화 새로고침",
+    messageJump: {
+      button: "메시지로 이동",
+      title: "내 메시지",
+      empty: "아직 메시지가 없습니다",
+      imageMessage: "(이미지)",
+      attachmentMessage: "(첨부)",
+      close: "닫기",
+      locating: "기록에서 메시지 찾는 중…",
+      locateFailed: "해당 기록 부분을 불러올 수 없습니다",
+    },
     permission: {
       plan: "계획",
       required: "권한 필요",
@@ -325,8 +336,13 @@ export const ko: TranslationResources = {
   },
   importSession: {
     title: "세션 가져오기",
+    search: {
+      placeholder: "제목, 프롬프트 또는 경로로 검색...",
+    },
     filters: {
       all: "전체",
+      byProvider: "프로바이더별 필터",
+      byProject: "프로젝트별 필터",
     },
     status: {
       connectHost: "세션을 가져오려면 호스트에 연결하세요",
@@ -348,6 +364,7 @@ export const ko: TranslationResources = {
       noRecent: "가져올 최근 세션이 없습니다.",
       alreadyImported: "최근 세션이 모두 이미 가져와졌습니다.",
       noProviderSessions: "{{provider}} 세션을 찾을 수 없습니다.",
+      noMatchingResults: "검색이나 필터와 일치하는 세션이 없습니다.",
     },
     row: {
       importing: "가져오는 중...",
@@ -909,6 +926,7 @@ export const ko: TranslationResources = {
         label: "제목",
         title: "제목",
         branch: "브랜치 이름",
+        agent: "에이전트 세션",
       },
       show: {
         label: "표시 항목",
@@ -929,6 +947,18 @@ export const ko: TranslationResources = {
         all: "모든 호스트",
       },
     },
+    filter: {
+      placeholder: "워크스페이스 필터",
+      close: "필터 닫기",
+      noResults: "일치하는 워크스페이스가 없습니다",
+    },
+    displayPrefs: {
+      groupBy: "그룹화",
+      project: "프로젝트",
+      status: "상태",
+      filter: "필터",
+      allHosts: "모든 호스트",
+    },
     pinned: {
       title: "고정됨",
     },
@@ -944,6 +974,9 @@ export const ko: TranslationResources = {
       home: "홈",
       settings: "설정",
       closeSidebar: "사이드바 닫기",
+      importRecentSessions: "최근 세션 가져오기",
+      more: "더 보기",
+      displayPreferences: "표시 설정",
     },
     help: {
       trigger: "도움말 및 지원",
@@ -959,6 +992,7 @@ export const ko: TranslationResources = {
     sections: {
       sessions: "기록",
       schedules: "일정",
+      workspaces: "워크스페이스",
     },
     worktreeSetup: {
       title: "워크트리 스크립트 설정",
@@ -999,6 +1033,11 @@ export const ko: TranslationResources = {
         serviceRunning: "서비스 {{name}} 실행 중",
         serviceUnhealthy: "서비스 {{name}} 비정상",
         creating: "생성하는 중...",
+        needsInput: "입력 필요",
+        failed: "실패",
+        attention: "리뷰 준비됨",
+        running: "작업 중",
+        done: "완료",
       },
       actions: {
         menu: "워크스페이스 작업",
@@ -1009,6 +1048,7 @@ export const ko: TranslationResources = {
         copyPath: "경로 복사",
         copyBranchName: "브랜치 이름 복사",
         rename: "워크스페이스 이름 변경",
+        markAsRead: "읽음으로 표시",
         pin: "상단에 고정",
         unpin: "고정 해제",
         archive: "보관",
@@ -1038,6 +1078,17 @@ export const ko: TranslationResources = {
         archiveFailed: "워크스페이스를 보관하지 못했습니다.",
       },
     },
+  },
+  timeAgo: {
+    justNow: "방금",
+    secondsAgo: "{{count}}초 전",
+    minutesAgo: "{{count}}분 전",
+    hoursAgo: "{{count}}시간 전",
+    daysAgo: "{{count}}일 전",
+    daysAgo_one: "{{count}}일 전",
+    daysAgo_two: "{{count}}일 전",
+    daysAgo_few: "{{count}}일 전",
+    daysAgo_other: "{{count}}일 전",
   },
   newWorkspace: {
     title: "새 워크스페이스",
@@ -1534,6 +1585,12 @@ export const ko: TranslationResources = {
     failed: "파일을 다운로드하지 못했습니다.",
     shareFile: "파일 공유",
     shareFileNamed: "{{fileName}} 공유",
+    open: "열기",
+    save: "저장",
+    savedToDirectory: "선택한 폴더에 저장되었습니다.",
+    saveCancelled: "저장이 취소되었습니다.",
+    openFailed: "이 기기에서 이 파일을 열 수 있는 앱이 없습니다.",
+    saveFailed: "파일을 저장하지 못했습니다.",
   },
   menu: {
     backdrop: "메뉴 배경",
@@ -1556,6 +1613,8 @@ export const ko: TranslationResources = {
       loading: "파일 불러오는 중...",
       noPreview: "사용 가능한 미리보기가 없습니다",
       binaryPreviewUnavailable: "바이너리 미리보기를 사용할 수 없습니다",
+      truncatedPreview: "미리보기가 잘렸습니다 — 전체 파일은 {{size}}입니다",
+      loadFull: "전체 로드",
       failedToLoad: "파일을 불러오지 못했습니다",
       failedToLoadPreview: "파일 미리보기를 불러오지 못했습니다",
       editor: {
