@@ -195,6 +195,8 @@ export const SHORTCUT_HELP_ROW_ORDER: Record<ShortcutSectionId, readonly string[
   layout: ["toggle-left-sidebar", "toggle-right-sidebar", "toggle-both-sidebars", "toggle-focus"],
   "agent-input": [
     "focus-message-input",
+    "open-model-picker",
+    "model-picker-jump-index",
     "cycle-agent-mode",
     "voice-toggle",
     "dictation-toggle",
@@ -214,6 +216,8 @@ const SHORTCUT_HELP_LABEL_KEYS: Record<string, string> = {
   "workspace-tab-target-changes": "workspace.tabs.actions.changes",
   "workspace-tab-target-files": "workspace.tabs.actions.files",
   "workspace-tab-close-current": "settings.shortcuts.help.closeCurrentTab",
+  "open-model-picker": "settings.shortcuts.help.openModelPicker",
+  "model-picker-jump-index": "settings.shortcuts.help.pickModelByNumber",
   "workspace-jump-index": "settings.shortcuts.help.jumpToWorkspace",
   "workspace-tab-jump-index": "settings.shortcuts.help.jumpToTab",
   "workspace-prev": "settings.shortcuts.help.previousWorkspace",
@@ -528,6 +532,74 @@ const SHORTCUT_BINDINGS: readonly ShortcutBinding[] = [
       id: "workspace-tab-close-current",
       section: "tabs-panes",
       label: "Close current tab",
+    },
+  },
+
+  // --- Model picker ---
+  // The digit bindings sit above the index-jump bindings on purpose: matching
+  // takes the first binding whose combo and context both match, and the jump
+  // bindings claim the same digits everywhere. Their `model-sheet` scope keeps
+  // them inert until the picker owns focus, so this ordering is what lets a
+  // digit pick a model inside the sheet and jump a workspace everywhere else.
+  {
+    id: "agent-model-open-cmd-shift-m-mac",
+    action: "agent.model.open",
+    combo: "Cmd+Shift+M",
+    when: { mac: true, commandCenter: false },
+    help: {
+      id: "open-model-picker",
+      section: "agent-input",
+      label: "Switch model",
+    },
+  },
+  {
+    id: "agent-model-open-ctrl-shift-m-non-mac",
+    action: "agent.model.open",
+    combo: "Ctrl+Shift+M",
+    when: { mac: false, commandCenter: false },
+    help: {
+      id: "open-model-picker",
+      section: "agent-input",
+      label: "Switch model",
+    },
+  },
+  {
+    id: "model-sheet-jump-index-alt-digit-web",
+    action: "agent.model.pick.index",
+    combo: "Alt+Digit",
+    when: { desktop: false, commandCenter: false, focusScope: "model-sheet" },
+    payload: { type: "index" },
+    help: {
+      id: "model-picker-jump-index",
+      section: "agent-input",
+      label: "Pick model by number",
+      defaultDisplayKeys: ["alt", "1-9"],
+    },
+  },
+  {
+    id: "model-sheet-jump-index-cmd-digit-mac-desktop",
+    action: "agent.model.pick.index",
+    combo: "Cmd+Digit",
+    when: { mac: true, desktop: true, commandCenter: false, focusScope: "model-sheet" },
+    payload: { type: "index" },
+    help: {
+      id: "model-picker-jump-index",
+      section: "agent-input",
+      label: "Pick model by number",
+      defaultDisplayKeys: ["mod", "1-9"],
+    },
+  },
+  {
+    id: "model-sheet-jump-index-ctrl-digit-non-mac-desktop",
+    action: "agent.model.pick.index",
+    combo: "Ctrl+Digit",
+    when: { mac: false, desktop: true, commandCenter: false, focusScope: "model-sheet" },
+    payload: { type: "index" },
+    help: {
+      id: "model-picker-jump-index",
+      section: "agent-input",
+      label: "Pick model by number",
+      defaultDisplayKeys: ["mod", "1-9"],
     },
   },
 

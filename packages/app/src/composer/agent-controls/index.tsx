@@ -942,6 +942,19 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
     handleCloseSheet,
     modelSelectorServerId,
   } = props;
+  // The "Change model" hint has to stay out of the way of the panel it opens. The desktop
+  // panel renders inside the tooltip trigger's subtree, so opening it feeds that trigger the
+  // hover and focus events that would otherwise paint the hint over the open list.
+  const [modelHintOpen, setModelHintOpen] = useState(false);
+  const [modelPanelOpen, setModelPanelOpen] = useState(false);
+  const handleModelPanelOpen = useCallback(() => {
+    setModelPanelOpen(true);
+    onModelSelectorOpen?.();
+  }, [onModelSelectorOpen]);
+  const handleModelPanelClose = useCallback(() => {
+    setModelPanelOpen(false);
+    onDropdownClose?.();
+  }, [onDropdownClose]);
   const modelToolbar = useMemo(
     () => ({ glyphSize, showCaret: presentation.showCarets }),
     [glyphSize, presentation.showCarets],
@@ -981,7 +994,13 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
       ) : null}
 
       {canSelectModel ? (
-        <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
+        <Tooltip
+          delayDuration={0}
+          enabledOnDesktop
+          enabledOnMobile={false}
+          open={modelHintOpen && !modelPanelOpen}
+          onOpenChange={setModelHintOpen}
+        >
           <TooltipTrigger asChild triggerRefProp="ref">
             <View style={styles.modelControl}>
               <CombinedModelSelector
@@ -996,8 +1015,8 @@ function DesktopAgentControlsContent(props: DesktopAgentControlsContentProps) {
                 onEditProfile={onEditAgentProfile}
                 isLoading={isModelLoading}
                 disabled={modelDisabled}
-                onOpen={onModelSelectorOpen}
-                onClose={onDropdownClose}
+                onOpen={handleModelPanelOpen}
+                onClose={handleModelPanelClose}
                 onRetryProvider={onRetryModelProvider}
                 isRetryingProvider={isRetryingModelProvider}
                 serverId={modelSelectorServerId}

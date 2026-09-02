@@ -31,8 +31,17 @@ function getFocusCandidateElements(target: EventTarget | null): Element[] {
 export function resolveKeyboardFocusScope(input: {
   target: EventTarget | null;
   commandCenterOpen: boolean;
+  modelSelectorOpen: boolean;
 }): KeyboardFocusScope {
-  const { target, commandCenterOpen } = input;
+  const { target, commandCenterOpen, modelSelectorOpen } = input;
+
+  // The model selector panel sits over the workspace and its digits pick model rows,
+  // so it claims the chord before the scan below can read its own search box as a
+  // plain text field.
+  if (modelSelectorOpen) {
+    return "model-sheet";
+  }
+
   const candidates = getFocusCandidateElements(target);
   if (candidates.length === 0) {
     return commandCenterOpen ? "command-center" : "other";

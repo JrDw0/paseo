@@ -357,6 +357,7 @@ export function useKeyboardShortcuts({
       const focusScope = resolveKeyboardFocusScope({
         target: event.target,
         commandCenterOpen: store.commandCenterOpen,
+        modelSelectorOpen: store.modelSelectorOwner !== null,
       });
       resolveAndPerformShortcut({
         event,
