@@ -268,6 +268,7 @@ function FlowRow({ option, active }: { option: FlowRowOption; active: boolean })
       onPress={option.select}
       style={rowStyle}
       testID={option.testID}
+      tabIndex={-1}
     >
       <View style={styles.iconSlot}>
         <MutedFlowIcon icon={option.icon} size={16} />

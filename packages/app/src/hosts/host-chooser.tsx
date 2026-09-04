@@ -123,6 +123,7 @@ function HostChooserRow({
       onPress={handlePress}
       style={rowStyle}
       testID={`host-chooser-row-${host.serverId}`}
+      tabIndex={-1}
     >
       <View style={styles.rowIconSlot}>
         <HostStatusDotSlot serverId={host.serverId} />

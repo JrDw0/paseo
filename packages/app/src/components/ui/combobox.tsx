@@ -306,6 +306,7 @@ export function ComboboxItem({
       disabled={disabled}
       onPress={onPress}
       style={itemPressableStyle}
+      tabIndex={-1}
     >
       {leadingContent}
       <View style={itemContentStyle}>
