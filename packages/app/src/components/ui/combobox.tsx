@@ -298,6 +298,7 @@ export function ComboboxItem({
       style={itemPressableStyle}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
+      tabIndex={-1}
     >
       {leadingContent}
       <View style={itemContentStyle}>

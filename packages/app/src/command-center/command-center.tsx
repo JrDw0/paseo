@@ -424,6 +424,7 @@ const ResultRow = memo(function ResultRow({ result, active, onSelect }: ResultRo
       accessibilityLabel={accessibilityLabel}
       accessibilityState={accessibilityState}
       aria-pressed={isWeb ? choice?.selected : undefined}
+      tabIndex={-1}
       testID={
         result.kind === "file" ? `command-center-file-row-${result.filePath}` : choice?.testId
       }
