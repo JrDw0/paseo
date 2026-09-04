@@ -40,6 +40,7 @@ const NONE: ShortcutAction = { kind: "none" };
 // Action ids whose routing is a no-payload pass-through to the dispatcher.
 const PASSTHROUGH_DISPATCH: Record<string, KeyboardActionDefinition> = {
   "agent.interrupt": { id: "agent.interrupt", scope: "global" },
+  "agent.model.open": { id: "agent.model.open", scope: "workspace" },
   "workspace.tab.menu.open": { id: "workspace.tab.menu.open", scope: "workspace" },
   "workspace.tab.target.agent": { id: "workspace.tab.target.agent", scope: "workspace" },
   "workspace.tab.target.browser": { id: "workspace.tab.target.browser", scope: "workspace" },
@@ -105,6 +106,11 @@ function routeWorkspaceTabNavigateIndex(payload: KeyboardShortcutPayload): Short
     scope: "workspace",
     index: payload.index,
   });
+}
+
+function routeAgentModelPickIndex(payload: KeyboardShortcutPayload): ShortcutAction {
+  if (!hasPayloadKey(payload, "index")) return NONE;
+  return dispatch({ id: "agent.model.pick-index", scope: "workspace", index: payload.index });
 }
 
 function routeWorkspaceTabNavigateRelative(payload: KeyboardShortcutPayload): ShortcutAction {
@@ -195,6 +201,8 @@ export function routeKeyboardShortcut(
   switch (input.action) {
     case "workspace.tab.navigate.index":
       return routeWorkspaceTabNavigateIndex(input.payload);
+    case "agent.model.pick.index":
+      return routeAgentModelPickIndex(input.payload);
     case "workspace.tab.navigate.relative":
       return routeWorkspaceTabNavigateRelative(input.payload);
     case "workspace.navigate.index":

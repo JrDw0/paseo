@@ -54,6 +54,7 @@ describe("resolveKeyboardFocusScope", () => {
     const scope = resolveKeyboardFocusScope({
       target: target as unknown as EventTarget,
       commandCenterOpen: false,
+      modelSelectorOpen: false,
     });
     expect(scope).toBe("terminal");
   });
@@ -64,6 +65,7 @@ describe("resolveKeyboardFocusScope", () => {
     const scope = resolveKeyboardFocusScope({
       target: null,
       commandCenterOpen: false,
+      modelSelectorOpen: false,
     });
     expect(scope).toBe("terminal");
   });
@@ -74,7 +76,22 @@ describe("resolveKeyboardFocusScope", () => {
     const scope = resolveKeyboardFocusScope({
       target: null,
       commandCenterOpen: false,
+      modelSelectorOpen: false,
     });
     expect(scope).toBe("editable");
+  });
+
+  it("resolves model-sheet scope while the model selector panel is open", () => {
+    // The panel's own search input is the focused element, and on its own that
+    // would read as a plain text field.
+    globalRef.document = { activeElement: new FakeElement({ tagName: "input" }) };
+
+    const scope = resolveKeyboardFocusScope({
+      target: null,
+      commandCenterOpen: false,
+      modelSelectorOpen: true,
+    });
+
+    expect(scope).toBe("model-sheet");
   });
 });

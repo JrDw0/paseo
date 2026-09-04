@@ -13,6 +13,15 @@ interface KeyboardShortcutsState {
   altDown: boolean;
   cmdOrCtrlDown: boolean;
   showShortcutBadges: boolean;
+  /**
+   * Handler id of the composer model selector that owns digit keys right now, or
+   * null. Its panel answers the same chord the workspace/tab jump shortcuts use,
+   * so the shortcut engine has to know the panel holds focus. Only a selector
+   * inside a live composer claims it — the selector on the settings and schedule
+   * forms never does. Ownership, not a boolean, so a second selector mounting
+   * while one is open cannot knock it off.
+   */
+  modelSelectorOwner: string | null;
   /** Sidebar-visible workspace targets (up to 9), in top-to-bottom visual order. */
   sidebarShortcutWorkspaceTargets: SidebarShortcutWorkspaceTarget[];
 
@@ -22,6 +31,8 @@ interface KeyboardShortcutsState {
   setCapturingShortcut: (capturing: boolean) => void;
   setAltDown: (down: boolean) => void;
   setCmdOrCtrlDown: (down: boolean) => void;
+  claimModelSelectorOwner: (owner: string) => void;
+  releaseModelSelectorOwner: (owner: string) => void;
   setSidebarShortcutWorkspaceTargets: (targets: SidebarShortcutWorkspaceTarget[]) => void;
   resetModifiers: () => void;
 }
@@ -57,6 +68,7 @@ export const useKeyboardShortcutsStore = create<KeyboardShortcutsState>((set, ge
   altDown: false,
   cmdOrCtrlDown: false,
   showShortcutBadges: false,
+  modelSelectorOwner: null,
   sidebarShortcutWorkspaceTargets: [],
 
   setCommandCenterOpen: (open, scope = null) =>
@@ -74,6 +86,11 @@ export const useKeyboardShortcutsStore = create<KeyboardShortcutsState>((set, ge
   },
   setSidebarShortcutWorkspaceTargets: (targets) =>
     set({ sidebarShortcutWorkspaceTargets: targets }),
+  claimModelSelectorOwner: (owner) => set({ modelSelectorOwner: owner }),
+  releaseModelSelectorOwner: (owner) => {
+    if (get().modelSelectorOwner !== owner) return;
+    set({ modelSelectorOwner: null });
+  },
   resetModifiers: () => {
     set({ altDown: false, cmdOrCtrlDown: false });
     updateBadgeTimer(set, get);

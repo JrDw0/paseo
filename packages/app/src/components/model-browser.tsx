@@ -33,8 +33,10 @@ import {
   type AgentProfileSeed,
 } from "@/agent-profiles";
 import type { SheetHeader } from "@/components/adaptive-modal-sheet";
+import { buildModelRowShortcutIndex } from "@/components/model-row-shortcuts";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -54,15 +56,12 @@ import { useCurrentOverlayLayer } from "@/lib/overlay-root";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
   groupProfilesByProviderModel,
+  normalizeModelSearchQuery,
   resolveInitialModelBrowserView,
   resolveModelBrowserAllView,
+  resolveModelListViewHeight,
   type ModelBrowserView,
 } from "@/components/model-browser-view";
-
-const DESKTOP_PROVIDER_VIEW_MIN_HEIGHT = 220;
-const DESKTOP_PROVIDER_VIEW_MAX_HEIGHT = 400;
-const DESKTOP_PROVIDER_VIEW_BASE_HEIGHT = 80;
-const DESKTOP_MODEL_ROW_HEIGHT = 40;
 
 const ThemedAlertTriangle = withUnistyles(AlertTriangle);
 const ThemedCheck = withUnistyles(Check);
@@ -189,6 +188,8 @@ interface ModelBrowserProps {
   rootBrowseContent?: React.ReactNode;
   /** Hide the pinned Profiles section while still using rows for model matching. */
   showProfilesSection?: boolean;
+  /** Digit-label the model rows, the keys that pick them while the sheet is open. */
+  showRowShortcutBadges?: boolean;
 }
 
 interface ModelBrowserContentProps extends Omit<ModelBrowserProps, "state" | "scrolling"> {
@@ -247,14 +248,7 @@ function resolveDesktopFixedHeight(
   view: ModelBrowserView,
   providers: ProviderSelectorProvider[],
 ): number {
-  const modelCount = countModelsInView(view, providers);
-  return Math.min(
-    Math.max(
-      DESKTOP_PROVIDER_VIEW_MIN_HEIGHT,
-      DESKTOP_PROVIDER_VIEW_BASE_HEIGHT + modelCount * DESKTOP_MODEL_ROW_HEIGHT,
-    ),
-    DESKTOP_PROVIDER_VIEW_MAX_HEIGHT,
-  );
+  return resolveModelListViewHeight(countModelsInView(view, providers));
 }
 
 export function useModelBrowser({
@@ -406,10 +400,6 @@ export function useModelBrowser({
     reset,
     drillDown,
   };
-}
-
-function normalizeSearchQuery(value: string): string {
-  return value.trim().toLowerCase();
 }
 
 interface ModelBrowserPressableProps {
@@ -654,6 +644,7 @@ function ModelRow({
   row,
   isSelected,
   showProviderLabel = false,
+  shortcutNumber = null,
   onPress,
   profiledRows,
   onCreateProfile,
@@ -663,6 +654,8 @@ function ModelRow({
   row: ProviderSelectionModelRow;
   isSelected: boolean;
   showProviderLabel?: boolean;
+  /** Digit that picks this row, or null when the row carries no digit. */
+  shortcutNumber?: number | null;
   onPress: () => void;
   profiledRows: AgentProfilePickerRowModel[];
   onCreateProfile?: (seed: AgentProfileSeed) => void;
@@ -800,6 +793,7 @@ function ModelRow({
                 <ThemedCheck size={ICON_SIZE.sm} uniProps={foregroundMutedMapping} />
               ) : null}
             </View>
+            {shortcutNumber !== null ? <Shortcut keys={[String(shortcutNumber)]} /> : null}
             {profileAction}
           </View>
         </View>
@@ -812,6 +806,7 @@ function SelectableModelRow({
   row,
   isSelected,
   showProviderLabel,
+  shortcutNumber,
   onSelect,
   profiledRows,
   onCreateProfile,
@@ -821,6 +816,7 @@ function SelectableModelRow({
   row: ProviderSelectionModelRow;
   isSelected: boolean;
   showProviderLabel?: boolean;
+  shortcutNumber?: number | null;
   onSelect: (provider: string, modelId: string) => void;
   profiledRows: AgentProfilePickerRowModel[];
   onCreateProfile?: (seed: AgentProfileSeed) => void;
@@ -835,6 +831,7 @@ function SelectableModelRow({
       row={row}
       isSelected={isSelected}
       showProviderLabel={showProviderLabel}
+      shortcutNumber={shortcutNumber}
       onPress={handlePress}
       profiledRows={profiledRows}
       onCreateProfile={onCreateProfile}
@@ -1109,12 +1106,15 @@ function IndependentProviderList({ children }: { children: React.ReactNode }) {
   );
 }
 
+const EMPTY_SHORTCUT_INDEX: Map<string, number> = new Map();
+
 function ModelRowList({
   rows,
   selectedProvider,
   selectedModel,
   onSelect,
   showProviderLabel = false,
+  showShortcutBadges = false,
   header,
   scrolling,
   profiledLookup,
@@ -1127,6 +1127,8 @@ function ModelRowList({
   selectedModel: string;
   onSelect: (provider: string, modelId: string) => void;
   showProviderLabel?: boolean;
+  /** Label the first rows with the digit that picks them. */
+  showShortcutBadges?: boolean;
   header?: React.ReactElement;
   scrolling: "sheet" | "independent";
   profiledLookup: Map<string, AgentProfilePickerRowModel[]>;
@@ -1135,12 +1137,17 @@ function ModelRowList({
   onEditProfiles?: () => void;
 }) {
   const isCompact = useIsCompactFormFactor();
+  const shortcutIndex = useMemo(
+    () => (showShortcutBadges ? buildModelRowShortcutIndex(rows) : EMPTY_SHORTCUT_INDEX),
+    [rows, showShortcutBadges],
+  );
   const renderItem = useCallback(
     ({ item }: { item: ProviderSelectionModelRow }) => (
       <SelectableModelRow
         row={item}
         isSelected={item.provider === selectedProvider && item.modelId === selectedModel}
         showProviderLabel={showProviderLabel}
+        shortcutNumber={shortcutIndex.get(item.favoriteKey) ?? null}
         onSelect={onSelect}
         profiledRows={profiledLookup.get(`${item.provider}:${item.modelId}`) ?? []}
         onCreateProfile={onCreateProfile}
@@ -1157,6 +1164,7 @@ function ModelRowList({
       selectedModel,
       selectedProvider,
       showProviderLabel,
+      shortcutIndex,
     ],
   );
   const keyExtractor = useCallback((row: ProviderSelectionModelRow) => row.favoriteKey, []);
@@ -1245,6 +1253,7 @@ function ProviderModelBrowserContent({
   onRetryProvider,
   isRetryingProvider,
   scrolling,
+  showRowShortcutBadges = false,
 }: {
   view: Extract<ModelBrowserView, { kind: "provider" }>;
   provider: ProviderSelectorProvider | null;
@@ -1262,6 +1271,7 @@ function ProviderModelBrowserContent({
   onRetryProvider?: (provider: AgentProvider) => void;
   isRetryingProvider: boolean;
   scrolling: "sheet" | "independent";
+  showRowShortcutBadges: boolean;
 }) {
   const { t } = useTranslation();
   const visibleRows = useMemo(
@@ -1324,6 +1334,7 @@ function ProviderModelBrowserContent({
       onSelect={onSelect}
       header={profileHeader}
       scrolling={scrolling}
+      showShortcutBadges={showRowShortcutBadges}
       profiledLookup={profiledLookup}
       onCreateProfile={onCreateProfile}
       onEditProfile={onEditProfile}
@@ -1352,9 +1363,10 @@ function ModelBrowserContent({
   searchAllOnFocus,
   rootBrowseContent,
   showProfilesSection = true,
+  showRowShortcutBadges = false,
 }: ModelBrowserContentProps) {
   const { t } = useTranslation();
-  const normalizedQuery = useMemo(() => normalizeSearchQuery(searchQuery), [searchQuery]);
+  const normalizedQuery = useMemo(() => normalizeModelSearchQuery(searchQuery), [searchQuery]);
   const profiledLookup = useMemo(
     () => groupProfilesByProviderModel(profiles?.rows ?? []),
     [profiles],
@@ -1396,6 +1408,7 @@ function ModelBrowserContent({
         onRetryProvider={onRetryProvider}
         isRetryingProvider={isRetryingProvider}
         scrolling={scrolling}
+        showRowShortcutBadges={showRowShortcutBadges}
       />
     );
   }
@@ -1419,6 +1432,7 @@ function ModelBrowserContent({
         selectedModel={selectedModel}
         onSelect={onSelect}
         showProviderLabel
+        showShortcutBadges={showRowShortcutBadges}
         scrolling={scrolling}
         profiledLookup={profiledLookup}
         onCreateProfile={onCreateProfile}
@@ -1484,6 +1498,7 @@ export function ModelBrowser({
   searchAllOnFocus = false,
   rootBrowseContent,
   showProfilesSection,
+  showRowShortcutBadges = false,
 }: ModelBrowserProps) {
   return (
     <ModelBrowserContent
@@ -1506,6 +1521,7 @@ export function ModelBrowser({
       searchAllOnFocus={searchAllOnFocus}
       rootBrowseContent={rootBrowseContent}
       showProfilesSection={showProfilesSection}
+      showRowShortcutBadges={showRowShortcutBadges}
     />
   );
 }

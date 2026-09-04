@@ -49,6 +49,40 @@ export function groupProfilesByProviderModel<T extends ModelProfileRef>(
   return lookup;
 }
 
+/** Search text as the model browser compares it. One definition, list and shortcuts alike. */
+export function normalizeModelSearchQuery(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export const DESKTOP_MODEL_ROW_HEIGHT = 40;
+const DESKTOP_LIST_MIN_HEIGHT = 220;
+const DESKTOP_LIST_BASE_HEIGHT = 80;
+const DESKTOP_LIST_MAX_HEIGHT = 400;
+
+/**
+ * Height of the desktop model list.
+ *
+ * The mouse-opened list is capped so a long catalog never runs off screen. A
+ * shortcut-opened list instead sizes to `minRows` rows, because every row a digit
+ * can address has to be visible; that list is deliberately allowed past the cap.
+ */
+export function resolveModelListViewHeight(modelCount: number, minRows = 0): number {
+  if (minRows > 0) {
+    const rows = Math.min(Math.max(modelCount, 1), minRows);
+    return Math.max(
+      DESKTOP_LIST_MIN_HEIGHT,
+      DESKTOP_LIST_BASE_HEIGHT + rows * DESKTOP_MODEL_ROW_HEIGHT,
+    );
+  }
+  return Math.min(
+    Math.max(
+      DESKTOP_LIST_MIN_HEIGHT,
+      DESKTOP_LIST_BASE_HEIGHT + modelCount * DESKTOP_MODEL_ROW_HEIGHT,
+    ),
+    DESKTOP_LIST_MAX_HEIGHT,
+  );
+}
+
 /** What the root view shows: the provider drill-down, or ranked cross-provider results. */
 export type ModelBrowserAllView =
   | { kind: "browse" }

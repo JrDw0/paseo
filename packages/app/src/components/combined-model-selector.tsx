@@ -9,6 +9,8 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Combobox, type ComboboxOption, type ComboboxProps } from "@/components/ui/combobox";
 import { ModelBrowser, ModelProviderGlyph, useModelBrowser } from "@/components/model-browser";
 import { resolveModelBrowserScrolling } from "@/components/model-browser-view";
+import { useModelSelectorShortcuts } from "@/components/use-model-selector-shortcuts";
+import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isNative, isWeb } from "@/constants/platform";
 import type { ProviderSelectorProvider } from "@/provider-selection/provider-selection";
@@ -94,6 +96,9 @@ export function CombinedModelSelector({
   const anchorRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isContentReady, setIsContentReady] = useState(isWeb);
+  // A shortcut-opened panel lists every model instead of the provider drill-down,
+  // and grows to the rows its digits can address; a mouse-opened panel is unchanged.
+  const [openedByShortcut, setOpenedByShortcut] = useState(false);
   const browser = useModelBrowser({
     providers,
     selectedProvider,
@@ -102,7 +107,8 @@ export function CombinedModelSelector({
     profiles,
     serverId,
   });
-  const { prepareToOpen, reset } = browser;
+  const { prepareToOpen, reset, showAll } = browser;
+  const { isActiveComposer } = useComposerKeyboardScope();
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -112,11 +118,19 @@ export function CombinedModelSelector({
         onOpen?.();
         return;
       }
+      setOpenedByShortcut(false);
       reset();
       onClose?.();
     },
     [onClose, onOpen, prepareToOpen, reset],
   );
+
+  const openFromShortcut = useCallback(() => {
+    setOpenedByShortcut(true);
+    setIsOpen(true);
+    showAll();
+    onOpen?.();
+  }, [onOpen, showAll]);
 
   const handleSelect = useCallback(
     (provider: string, modelId: string) => {
@@ -125,6 +139,22 @@ export function CombinedModelSelector({
     },
     [handleOpenChange, onSelect],
   );
+
+  const { desktopFixedHeight } = useModelSelectorShortcuts({
+    providers,
+    isLoading,
+    disabled,
+    isOpen,
+    isActiveComposer,
+    view: browser.view,
+    searchQuery: browser.searchQuery,
+    isSearchFocused: browser.isSearchFocused,
+    searchAllOnFocus: openedByShortcut,
+    desktopFixedHeight: browser.desktopFixedHeight,
+    open: openFromShortcut,
+    close: () => handleOpenChange(false),
+    onSelectModel: handleSelect,
+  });
 
   useEffect(() => {
     if (isWeb) return () => {};
@@ -203,6 +233,8 @@ export function CombinedModelSelector({
       onRetryProvider={onRetryProvider}
       isRetryingProvider={isRetryingProvider}
       scrolling={modelBrowserScrolling}
+      searchAllOnFocus={openedByShortcut}
+      showRowShortcutBadges={!isCompact}
     />
   ) : (
     <View style={styles.sheetLoadingState}>
@@ -274,7 +306,7 @@ export function CombinedModelSelector({
         desktopPlacement={desktopPlacement}
         desktopMinWidth={desktopMinWidth}
         desktopLockWidth
-        desktopFixedHeight={browser.desktopFixedHeight}
+        desktopFixedHeight={desktopFixedHeight}
         desktopChildrenScrollEnabled={false}
         header={browser.header}
         mobileChildrenScrollEnabled={!browser.isProviderView || !isNative}

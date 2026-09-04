@@ -182,6 +182,46 @@ describe("keyboard-shortcuts", () => {
       payload: { index: 2 },
     },
     {
+      name: "opens the model picker with Cmd+Shift+M on mac",
+      event: { key: "M", code: "KeyM", metaKey: true, shiftKey: true },
+      context: { isMac: true },
+      action: "agent.model.open",
+    },
+    {
+      name: "opens the model picker with Ctrl+Shift+M while the terminal is focused",
+      event: { key: "M", code: "KeyM", ctrlKey: true, shiftKey: true },
+      context: { isMac: false, focusScope: "terminal" },
+      action: "agent.model.open",
+    },
+    {
+      name: "picks a model row with Alt+digit in the model sheet on web",
+      event: { key: "2", code: "Digit2", altKey: true },
+      context: { isMac: true, isDesktop: false, focusScope: "model-sheet" },
+      action: "agent.model.pick.index",
+      payload: { index: 2 },
+    },
+    {
+      name: "picks a model row with Cmd+digit in the model sheet on mac desktop",
+      event: { key: "2", code: "Digit2", metaKey: true },
+      context: { isMac: true, isDesktop: true, focusScope: "model-sheet" },
+      action: "agent.model.pick.index",
+      payload: { index: 2 },
+    },
+    {
+      name: "picks a model row with Ctrl+digit in the model sheet on non-mac desktop",
+      event: { key: "2", code: "Digit2", ctrlKey: true },
+      context: { isMac: false, isDesktop: true, focusScope: "model-sheet" },
+      action: "agent.model.pick.index",
+      payload: { index: 2 },
+    },
+    {
+      name: "keeps desktop Mod+digit jumping to a workspace outside the model sheet",
+      event: { key: "2", code: "Digit2", metaKey: true },
+      context: { isMac: true, isDesktop: true, focusScope: "message-input" },
+      action: "workspace.navigate.index",
+      payload: { index: 2 },
+    },
+    {
       name: "matches tab index jump on mac desktop via Cmd+Alt+digit",
       event: { key: "@", code: "Digit2", metaKey: true, altKey: true },
       context: { isMac: true, isDesktop: true },
@@ -462,6 +502,11 @@ describe("keyboard-shortcuts", () => {
       context: { isMac: true },
     },
     {
+      name: "does not open the model picker while command center is open",
+      event: { key: "M", code: "KeyM", metaKey: true, shiftKey: true },
+      context: { isMac: true, commandCenterOpen: true },
+    },
+    {
       name: "keeps mac Option+digit available for international text input",
       event: { key: "@", code: "Digit2", altKey: true },
       context: { isMac: true, isDesktop: true, focusScope: "message-input" },
@@ -638,6 +683,8 @@ describe("keyboard-shortcut help sections", () => {
         "new-agent": ["mod", "O"],
         "workspace-tab-new": ["mod", "T"],
         "workspace-jump-index": ["alt", "1-9"],
+        "open-model-picker": ["mod", "shift", "M"],
+        "model-picker-jump-index": ["alt", "1-9"],
         "workspace-tab-jump-index": ["alt", "shift", "1-9"],
         "workspace-tab-close-current": ["alt", "shift", "W"],
         "workspace-pane-split-right": ["mod", "\\"],
@@ -653,6 +700,8 @@ describe("keyboard-shortcut help sections", () => {
         "new-workspace": ["mod", "N"],
         "workspace-tab-new": ["mod", "T"],
         "workspace-jump-index": ["mod", "1-9"],
+        "open-model-picker": ["mod", "shift", "M"],
+        "model-picker-jump-index": ["mod", "1-9"],
         "workspace-tab-jump-index": ["mod", "alt", "1-9"],
         // Derived from `combo: "Cmd+W"`, so the token is `mod` where the row
         // used to be hand-authored as `meta`. This binding is mac-only and

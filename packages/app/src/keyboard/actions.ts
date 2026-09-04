@@ -2,6 +2,7 @@ export type KeyboardFocusScope =
   | "terminal"
   | "message-input"
   | "command-center"
+  | "model-sheet"
   | "editable"
   | "browser"
   | "other";
@@ -19,6 +20,8 @@ export type MessageInputKeyboardActionKind =
 export type KeyboardActionId =
   | "agent.interrupt"
   | "agent.new"
+  | "agent.model.open"
+  | "agent.model.pick.index"
   | "workspace.tab.menu.open"
   | "workspace.tab.target.agent"
   | "workspace.tab.target.browser"

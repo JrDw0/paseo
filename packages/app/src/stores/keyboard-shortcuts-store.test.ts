@@ -9,6 +9,7 @@ beforeEach(() => {
     capturingShortcut: false,
     altDown: false,
     cmdOrCtrlDown: false,
+    modelSelectorOwner: null,
     sidebarShortcutWorkspaceTargets: [],
   });
 });
@@ -38,5 +39,17 @@ describe("keyboard-shortcuts-store", () => {
     expect(useKeyboardShortcutsStore.getState().capturingShortcut).toBe(false);
     useKeyboardShortcutsStore.getState().setCapturingShortcut(true);
     expect(useKeyboardShortcutsStore.getState().capturingShortcut).toBe(true);
+  });
+
+  it("holds the model selector chord for the selector that claimed it", () => {
+    useKeyboardShortcutsStore.getState().claimModelSelectorOwner("panel-a");
+    expect(useKeyboardShortcutsStore.getState().modelSelectorOwner).toBe("panel-a");
+
+    // A second selector closing must not knock the open one off the chord.
+    useKeyboardShortcutsStore.getState().releaseModelSelectorOwner("panel-b");
+    expect(useKeyboardShortcutsStore.getState().modelSelectorOwner).toBe("panel-a");
+
+    useKeyboardShortcutsStore.getState().releaseModelSelectorOwner("panel-a");
+    expect(useKeyboardShortcutsStore.getState().modelSelectorOwner).toBeNull();
   });
 });
