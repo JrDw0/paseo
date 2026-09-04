@@ -79,7 +79,7 @@ function AutocompleteRow({
   );
 
   return (
-    <Pressable onLayout={handleLayout} onPress={handlePress} style={pressableStyle}>
+    <Pressable onLayout={handleLayout} onPress={handlePress} style={pressableStyle} tabIndex={-1}>
       {isFileOrDir ? (
         <>
           <View style={styles.itemLeading}>
